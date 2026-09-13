@@ -58,7 +58,14 @@ The `on:` block decides when a workflow runs. Four triggers cover almost everyth
 | `workflow_dispatch` | You press a button | Testing the pipeline without opening a PR. |
 | `schedule` | On a cron | Drift detection, nightly builds, dependency checks. |
 
-Running on `pull_request` alone is a common and subtle mistake. A PR is tested as a *simulated merge* of your branch into `main` at the moment CI ran. If someone else merges in the meantime, your PR's green check describes a merge that no longer exists. Two individually-green PRs can merge into a broken `main` — this is called **semantic conflict**, and running on `push: main` is how you find out about it within minutes instead of days.
+**The rule: `pull_request` and `push: main` are both required, and they answer different questions.** Two ways to get `on:` wrong, and this lab starts you in the second one:
+
+| | How it happens | What goes wrong | What you see |
+|---|---|---|---|
+| **`pull_request` alone** | it feels sufficient — the PR is where review happens | a PR is tested as a *simulated merge* into `main` **as of when CI ran**. Someone else merging in the meantime invalidates it, and two individually-green PRs can merge into a broken `main` — a **semantic conflict** | every PR green, `main` broken, and no single commit to blame |
+| **`workflow_dispatch` alone** | the workflow is written but never attached to an event | nothing runs unless a human presses a button, and nobody presses it | an Actions tab that looks healthy because it is empty |
+
+The second is the state this lab hands you in Task A. Look at the Actions tab before you change it — an unattached pipeline is indistinguishable from no pipeline, and considerably more reassuring.
 
 > Further reading: [GitHub Docs — Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
 
@@ -89,9 +96,19 @@ This is the failure mode this lab is built around.
 
 The step shows a green tick. The job shows a green tick. The PR shows a passing check. The tests failed. Everyone downstream believes something false, and they believe it because of a green tick you gave them.
 
-`|| true` is the obvious version. The subtle versions are `continue-on-error: true`, a test command that exits 0 when it collects no tests at all, a script whose last line succeeds after an earlier line failed (shell scripts do not stop on error unless you tell them to — hence `set -e`), and a `if: always()` on a step whose failure then gets ignored.
+**The rule: for every step you add, ask what would have to happen for this step to fail.** If you cannot answer, it is not checking anything. `|| true` is only the most obvious way to lose that answer:
 
-Whenever you add a step to a pipeline, ask the question directly: **what would have to happen for this step to fail?** If you cannot answer, it is not checking anything.
+| | How it happens | What goes wrong | What you see |
+|---|---|---|---|
+| **`\|\| true`** | appended to silence a noisy step "for now" | the shell's exit code becomes 0 regardless of the command's | green |
+| **`continue-on-error: true`** | added to unblock a branch, never removed | the step is allowed to fail without failing the job | green, with a small warning icon almost nobody reads |
+| **A suite that collects nothing** | a renamed directory, a bad marker, a wrong `working-directory` | pytest exits 0 when it runs zero tests; so do most runners | green, and *faster than usual* — the only visible symptom |
+| **A script without `set -e`** | several commands in one `run:` block | shells do not stop on error; only the **last** command's exit code becomes the step's | green, when the failure was three lines from the end |
+| **`if: always()` on a step** | copied from an upload step that genuinely needs it | the step runs after a failure, and its own success masks the earlier one | green |
+
+Four of the five look identical from the outside: a passing check. The third is the only one with a tell, and the tell is that your pipeline got *faster* — which reads as good news.
+
+This is why the question is about failure rather than success. "Did this pass?" has the same answer in all five rows. "What would make this fail?" has no answer in any of them.
 
 ---
 
@@ -102,6 +119,15 @@ A workflow, by itself, has no authority. It runs, it reports, and anyone can mer
 The link between them is the **check name**, which is the job's `name:` (or its ID if unnamed). You mark check names as required; GitHub then refuses the merge until those names report success.
 
 This coupling has a sharp edge you will meet in Lab 02: if you add path filters so a job is *skipped* rather than run, a required check that never reports leaves the PR blocked forever. Skipped and successful are different states, and branch protection only accepts one of them.
+
+**Protection is a policy, and policies have an override.** With `enforce_admins: false` — what Task F sets, deliberately — a repository admin can still merge over a red X, and a direct `git push` to `main` succeeds with nothing but a line in the output:
+
+```
+remote: Bypassed rule violations for refs/heads/main:
+remote: - 2 of 2 required status checks are expected.
+```
+
+No extra flag, no confirmation, no `--force`. The same protection that made a failing test un-mergeable through a PR is a normal push away from irrelevant. Notice how little friction that is, and notice that the bypass is recorded — which is the only reason it is defensible at all.
 
 > Further reading: [GitHub Docs — About protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 
