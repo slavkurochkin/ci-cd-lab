@@ -70,16 +70,21 @@ Note that `working-directory` does **not** help here. It governs `run:` steps; i
 
 ### Matrices, and where they stop being the right tool
 
-A **matrix** expands one job definition into many, one per combination. It is the right tool when the variation is *homogeneous* — the same commands against a different Python version, OS, or database engine.
+A **matrix** expands one job definition into many, one per combination — the same steps run against a different Python version, OS, or database engine.
 
-It is the wrong tool when the legs differ in what they run. You can force it with `include:` and a per-entry command string, but you end up with a job whose steps are data, which no linter can check and no reader can follow. That is why this lab matrices the API over three Python versions and leaves the worker as its own job: **three Python versions are the same thing three times; a Python service and a Node service are two different things.**
+**The rule: a matrix is for homogeneous variation.** The moment the legs need different commands, it is the wrong tool. You can force it with `include:` and a per-entry command string, but you end up with a job whose steps are data — which no linter can check and no reader can follow. That is why this lab matrices the API over three Python versions and leaves the worker as its own job: **three Python versions are the same thing three times; a Python service and a Node service are two different things.**
 
-Two settings decide whether a matrix is useful:
+Three settings decide whether a matrix produces information or just a bill:
 
-- **`fail-fast`** defaults to `true`, cancelling every other leg on the first failure. That destroys the only information a version matrix exists to produce — whether the break is version-specific. Set it to `false`.
-- **The job `name:`** must include the matrix value. Without it the checks list shows three identical rows and you cannot tell which one is red.
+| Setting | What it is for | What happens if you get it wrong |
+|---|---|---|
+| **`fail-fast: false`** | keeps the other legs running after one fails | the default `true` cancels every sibling on the first failure, destroying the only thing a version matrix exists to tell you — whether the break is version-specific |
+| **`name:` includes the value** | labels each leg, e.g. `api (3.12)` | the checks list shows N identical rows and you cannot tell which one is red |
+| **something references `matrix.<value>`** | actually varies the environment | N identical jobs at N times the cost, all green, all testing the same default version |
 
-And the failure that catches everyone once: if nothing in the job actually *references* `matrix.<value>`, you get N identical jobs at N times the cost, all green, testing one version.
+The third is the one that catches everyone once, because it is invisible: the matrix expands, the UI shows three legs, they all pass, and nothing was ever tested twice.
+
+**Cost is part of the design.** Three Python versions is three times the runner-minutes, forever, on every push. Matrix the versions you actually support and would act on a failure in — typically your lowest supported version and the current release — not every version that exists. A leg whose failure would not change what you do is a leg you are paying to ignore.
 
 > Further reading: [GitHub Docs — Running variations of jobs in a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations)
 
