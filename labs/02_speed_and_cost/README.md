@@ -104,19 +104,31 @@ Two practical notes. On `upload-artifact@v4` an artifact name must be unique wit
 
 ### Path filters and the skipped-check trap
 
-In a monorepo, most changes touch one service. Building the other is pure waste, and **path filtering** removes it.
+In a monorepo most changes touch one service, and building the other is pure waste. **Path filtering** removes it — and combined with branch protection it introduces the quietest failure mode in this curriculum.
 
-The naive approach — `on: pull_request: paths:` — skips the *entire workflow*, which breaks branch protection in a way that is genuinely confusing the first time. The better approach is a small `changes` job that computes what moved and exposes it as outputs, with downstream jobs gated by `if:`.
+**The rule: never require a path-filtered job.** Gate the service jobs on change detection, add an aggregate job that inspects their results, and require only the aggregate. Everything below is why.
 
-That leads directly to the trap this lab is built around:
+The first instinct — `on: pull_request: paths:` — is the wrong tool: it filters the **entire workflow**, so nothing runs and nothing reports. What you want is a small `changes` job that computes what moved and exposes it as outputs, with the service jobs gated by `if:`. That works, and it leads straight into two failures that are opposites of each other:
+
+| | How it happens | What goes wrong | What you see |
+|---|---|---|---|
+| **Pending forever** | a path-filtered job (`worker`) is a required check | a PR touching only `app/api` skips `worker`, and a skipped job never reports a status | the check sits *Expected*, the merge button never unlocks, and there is no red X to fix |
+| **False-positive green** | `if: always()` on the aggregate with no result check | the job runs even when its dependencies failed, checks nothing, and exits 0 | a green tick that means nothing — `\|\| true` from Lab 01 in a better suit |
 
 > **A skipped job never reports a status. A required status check that never reports blocks the pull request forever.**
 
-Skipped and successful are different states, and branch protection only accepts one of them. So you cannot mark `api` and `worker` as required once they are path-filtered. The standard fix is an **aggregate job** — one job, `needs:` everything, `if: always()` so it runs even when its dependencies did not, and a body that inspects `needs.<job>.result` and treats `skipped` as fine while treating `failure` and `cancelled` as not. That one job is what you mark required.
+Skipped and successful are different states and branch protection accepts only one of them. Grey is neither green nor red, and that third state is the whole problem.
 
-`if: always()` on its own is the dangerous half of the pattern: the job runs, has nothing to check, and reports success no matter what its dependencies did. `always()` **without a result check is a green tick that means nothing** — the same failure mode as Lab 01's `|| true`, wearing a more sophisticated hat.
+**The aggregate pattern, in order:**
 
-Path filters also behave differently outside a pull request. On `push` or `workflow_dispatch` there is no base branch to diff against, so the filters report nothing changed and every job skips. On `main` you want the opposite — build everything.
+1. **Detect.** A `changes` job using `dorny/paths-filter@v3`, exposing one output per service.
+2. **Gate.** `needs: changes` plus an `if:` on each service job. Include the workflow file itself in every filter — otherwise a PR that only edits the pipeline skips every job and the pipeline change ships untested.
+3. **Aggregate.** One `ci-passed` job, `needs:` everything, `if: always()` so it runs even when its dependencies did not, and a body that reads `needs.<job>.result` — treating `skipped` as fine and `failure` or `cancelled` as not.
+4. **Require.** Mark `ci-passed` as the only required check, and remove the service jobs from protection.
+
+Step 3 is load-bearing in both halves. `if: always()` without the result check is the false-positive green above; the result check without `always()` never runs at all.
+
+Path filters also behave differently outside a pull request. On `push` or `workflow_dispatch` there is no base branch to diff against, so the filters report nothing changed and every job skips. On `main` you want the opposite — build everything — so your `if:` has to handle the non-PR case explicitly.
 
 ---
 
