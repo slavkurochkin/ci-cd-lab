@@ -1,0 +1,79 @@
+# Lab 03 -- reusable workflow (starter)
+#
+# This is the build contract for *any* service in this repository. It must not
+# know anything about Python or Node -- every service exposes the same Makefile
+# targets, so this workflow calls `make lint` and `make test` and lets the
+# service decide what those mean.
+name: Reusable service CI
+
+# TODO(lab-03-b): A workflow becomes callable by declaring `workflow_call`.
+# Replace the trigger below with `workflow_call` and declare three inputs.
+# Unlike composite action inputs, these are typed -- and the type is required:
+#
+#   service                -- required, type: string
+#   versions               -- optional, type: string, a JSON array,
+#                             default '["default"]'
+#   run-integration-tests  -- optional, type: boolean, default false
+#
+# Then declare an `outputs:` block exposing `coverage-artifact`, whose `value:`
+# reads the `test` job's output of the same name. A reusable workflow that
+# returns nothing is a script; one with outputs is an interface.
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # TODO(lab-03-c): Add a matrix over the versions the caller asked for.
+    #
+    # A matrix cannot be passed directly as an input -- inputs may only be
+    # strings, booleans or numbers. The caller therefore passes a JSON array as
+    # a string, and you unpack it here with fromJSON(). Set fail-fast to false,
+    # and put the matrix value in the job `name:` so the legs are told apart.
+
+    # TODO(lab-03-b): Declare a job output named `coverage-artifact` with the
+    # value `coverage-<service>`.
+    #
+    # Note *why* that value is safe: it does not depend on the matrix. A job
+    # output that varied per matrix leg would be written by every leg and the
+    # last writer wins, with no defined ordering.
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up ${{ inputs.service }}
+        # TODO(lab-03-a2): Call your composite action. A local action is
+        # referenced by path from the repository root, and the repository must
+        # already be checked out -- which is why this step comes second.
+        run: echo 'replace this step with a call to ./.github/actions/setup-service'
+
+      - name: Lint and format check
+        working-directory: app/${{ inputs.service }}
+        run: make lint
+
+      - name: Run tests
+        working-directory: app/${{ inputs.service }}
+        run: make test
+
+  # TODO(lab-03-e): Add an `integration` job that runs the API's integration
+  # suite against a real DynamoDB.
+  #
+  #   - run it only when the caller passed run-integration-tests
+  #   - declare a `services:` block with image amazon/dynamodb-local:2.5.2,
+  #     mapping container port 8000 to host port 8000
+  #   - check out, then set up the service with your composite action
+  #   - wait for DynamoDB to answer on http://localhost:8000 before testing
+  #   - run `make test-integration` in app/<service> with DYNAMODB_ENDPOINT
+  #     and AWS_REGION set in the step's env
+  #
+  # About the wait: `services:` supports health checks via
+  # `options: --health-cmd ...`, and when the image can describe its own
+  # readiness that is the right answer. amazon/dynamodb-local ships no curl,
+  # wget or shell health tool, so there is nothing for --health-cmd to run
+  # inside the container. When an image cannot describe its own readiness,
+  # waiting for it becomes your job -- and a job that starts testing before the
+  # dependency is up fails intermittently, which is the worst kind of failure.

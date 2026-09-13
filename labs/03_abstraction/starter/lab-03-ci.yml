@@ -1,0 +1,97 @@
+# Lab 03 -- the caller (starter)
+#
+# This is Lab 02's pipeline with the service jobs removed. Your task is to
+# put them back as four lines each, by calling the reusable workflow.
+name: Lab 03 CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lab-03-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      worker: ${{ steps.filter.outputs.worker }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Detect which services changed
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # TODO(lab-03-d2): Three files now affect both services: this file,
+          # the reusable workflow, and the composite action. A change to any of
+          # them must rebuild everything, or you ship a pipeline change that
+          # nothing tested.
+          #
+          # Add them to both filters. paths-filter parses this block as its own
+          # YAML document, so a YAML anchor works and saves you listing them
+          # twice:
+          #
+          #     shared: &shared
+          #       - '.github/workflows/lab-03-ci.yml'
+          #       - ...
+          #     api:
+          #       - *shared
+          #       - 'app/api/**'
+          filters: |
+            api:
+              - 'app/api/**'
+            worker:
+              - 'app/worker/**'
+
+  # TODO(lab-03-d1): Add the `api` and `worker` jobs. Each one calls the
+  # reusable workflow instead of listing steps:
+  #
+  #     uses: ./.github/workflows/reusable-service-ci.yml
+  #     with:
+  #       service: api
+  #       ...
+  #
+  # Keep the `needs: changes` and `if:` gating from Lab 02 -- calling a
+  # reusable workflow does not change how a job is scheduled.
+  #
+  # api should test Python 3.11, 3.12 and 3.13 and run integration tests.
+  # worker should test Node 20 and 22 and does not need them.
+  #
+  # One rule catches everyone once: a job that calls a reusable workflow may
+  # not also declare `steps`, `runs-on` or `timeout-minutes`. The called
+  # workflow owns all of that. If you copy those lines across from Lab 02 the
+  # workflow will not parse.
+
+  ci-passed:
+    name: ci-passed
+    needs: [api, worker]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check dependency results
+        env:
+          API_RESULT: ${{ needs.api.result }}
+          WORKER_RESULT: ${{ needs.worker.result }}
+          # TODO(lab-03-b): Read the reusable workflow's output here, to prove
+          # the interface actually returns something. The outputs of a job that
+          # called a reusable workflow are read exactly like any other job's:
+          # needs.<job>.outputs.<name>
+        run: |
+          echo "api=$API_RESULT worker=$WORKER_RESULT"
+          for result in "$API_RESULT" "$WORKER_RESULT"; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::a required job reported '$result'"; exit 1 ;;
+            esac
+          done
+          echo "All required jobs succeeded or were skipped."

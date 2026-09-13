@@ -1,0 +1,86 @@
+# Lab 03 -- the caller (solution)
+#
+# Compare this with lab-02-ci.yml. The contract is identical and larger --
+# it now also runs integration tests against a real DynamoDB -- but every
+# service is four lines of configuration.
+name: Lab 03 CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lab-03-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      worker: ${{ steps.filter.outputs.worker }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Detect which services changed
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shared: &shared
+              - '.github/workflows/lab-03-ci.yml'
+              - '.github/workflows/reusable-service-ci.yml'
+              - '.github/actions/setup-service/action.yml'
+            api:
+              - *shared
+              - 'app/api/**'
+            worker:
+              - *shared
+              - 'app/worker/**'
+
+  # A job that calls a reusable workflow has no `steps`, no `runs-on` and no
+  # `timeout-minutes` -- the called workflow owns all of that.
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || github.event_name != 'pull_request'
+    uses: ./.github/workflows/reusable-service-ci.yml
+    with:
+      service: api
+      versions: '["3.11", "3.12", "3.13"]'
+      run-integration-tests: true
+
+  worker:
+    needs: changes
+    if: needs.changes.outputs.worker == 'true' || github.event_name != 'pull_request'
+    uses: ./.github/workflows/reusable-service-ci.yml
+    with:
+      service: worker
+      versions: '["20", "22"]'
+
+  ci-passed:
+    name: ci-passed
+    needs: [api, worker]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check dependency results
+        env:
+          API_RESULT: ${{ needs.api.result }}
+          WORKER_RESULT: ${{ needs.worker.result }}
+          API_COVERAGE: ${{ needs.api.outputs.coverage-artifact }}
+        run: |
+          echo "api=$API_RESULT worker=$WORKER_RESULT coverage=$API_COVERAGE"
+          for result in "$API_RESULT" "$WORKER_RESULT"; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::a required job reported '$result'"; exit 1 ;;
+            esac
+          done
+          echo "All required jobs succeeded or were skipped."

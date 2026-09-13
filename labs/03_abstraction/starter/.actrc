@@ -1,0 +1,26 @@
+# Lab 03 -- act configuration (starter)
+#
+# TODO(lab-03-f): Right now the only way to find out whether a workflow change
+# works is to commit, push, and wait. That is a feedback loop measured in
+# minutes for a class of mistake -- a typo in a shell line, a wrong path, a
+# missing `shell:` -- that a local run catches in seconds.
+#
+# `act` runs workflow jobs in Docker containers on your laptop. Configure it
+# here so `make ci-local` needs no flags. You need three settings:
+#
+#   1. Map ubuntu-latest to a runner image that actually has tools installed.
+#      act's default is a near-empty stub and almost nothing will run on it.
+#      Use: -P ubuntu-latest=catthehacker/ubuntu:act-latest
+#
+#   2. On Apple Silicon, force the container architecture to linux/amd64.
+#      Slower under emulation, but it matches what GitHub runs.
+#
+#   3. Give it an artifact server path, or any step using upload-artifact
+#      fails outright instead of being skipped.
+#
+# Then run:  make ci-local JOB=api
+#
+# Know what act cannot do before you trust it: OIDC token minting, most of the
+# `github` context, the real Actions cache backend, and GitHub-hosted service
+# container networking are all approximated or absent. act catches wiring
+# mistakes. Only a real run proves a workflow works.

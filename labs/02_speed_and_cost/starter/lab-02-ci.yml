@@ -1,0 +1,133 @@
+# Lab 02 -- Speed & Cost
+#
+# This is Lab 01's pipeline: correct, and slower than it needs to be. Five
+# TODOs turn it into one that is just as correct and roughly half the cost.
+#
+# Record your baseline first (see the lab README), then:
+#
+#   make verify LAB=02
+#
+name: Lab 02 CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# TODO(lab-02-a): Push three commits in a minute and you pay for three full
+# runs, of which you will read one. Add a `concurrency` block, keyed so that
+# runs on the *same* branch supersede each other but runs on different
+# branches never do, and cancel the superseded run instead of finishing it.
+# Take care that this does not cancel runs on `main`.
+
+jobs:
+  # TODO(lab-02-d): Add a `changes` job here that detects which parts of the
+  # repository a pull request actually touched, and exposes the answer as job
+  # outputs. Use dorny/paths-filter@v3 with two filters:
+  #
+  #     api:    ['app/api/**', '.github/workflows/lab-02-ci.yml']
+  #     worker: ['app/worker/**', '.github/workflows/lab-02-ci.yml']
+  #
+  # Then gate the api and worker jobs on those outputs with `if:`.
+  #
+  # One trap: outside a pull request there is no base branch to diff against,
+  # so the filters report that nothing changed and every job skips -- including
+  # on pushes to `main`. Your `if:` needs to account for that.
+  #
+  # Read the note about `ci-passed` in TODO(lab-02-f) before you do this -- a
+  # skipped job and a successful job are different states, and required status
+  # checks only accept one of them.
+
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # TODO(lab-02-c): This job tests exactly one Python version, so you find out
+    # about a version incompatibility from a user rather than from CI. Add a
+    # matrix over Python 3.11, 3.12 and 3.13.
+    #
+    # Set fail-fast to false: when 3.11 fails you want to know whether 3.12 and
+    # 3.13 also failed, and the default cancels them to save money you are not
+    # actually saving.
+    #
+    # Remember to update the job `name:` so each matrix leg is distinguishable
+    # in the checks list, and pass the version through to setup-uv.
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        # TODO(lab-02-b): Every run downloads and builds every dependency from
+        # scratch. setup-uv can restore uv's download cache between runs --
+        # enable it, and key the cache on the lock file so it is invalidated
+        # exactly when dependencies change and never otherwise.
+
+      - name: Install dependencies
+        working-directory: app/api
+        run: uv sync --extra dev
+
+      - name: Lint and format check
+        working-directory: app/api
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Run tests
+        working-directory: app/api
+        run: uv run pytest
+        # TODO(lab-02-e): Produce a coverage report here (pytest-cov is already
+        # a dev dependency) and upload it with actions/upload-artifact so the
+        # numbers survive the runner being destroyed. Give it a name that stays
+        # unique across matrix legs, and a short retention-days -- the default
+        # of 90 days is storage you are paying attention to for about ten
+        # minutes.
+
+  worker:
+    name: worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          # TODO(lab-02-b): setup-node has built-in npm caching. Turn it on and
+          # point it at this service's lock file -- without an explicit
+          # dependency path it looks in the repository root, finds nothing, and
+          # caches nothing while still appearing to work.
+
+      - name: Install dependencies
+        working-directory: app/worker
+        run: npm ci
+
+      - name: Lint and format check
+        working-directory: app/worker
+        run: |
+          npm run lint
+          npm run format:check
+
+      - name: Run tests
+        working-directory: app/worker
+        run: npm test
+
+  # TODO(lab-02-f): Add a single `ci-passed` job that depends on api and worker
+  # and reports one result. This is the job you mark as required in branch
+  # protection, instead of the individual jobs.
+  #
+  # It has to handle a case that will otherwise block every pull request
+  # forever: once TODO(lab-02-d) is in place, a PR touching only app/api skips
+  # the worker job entirely -- and a *skipped* required check never reports
+  # success, so the merge button never unlocks.
+  #
+  # So this job must run even when its dependencies did not (`if: always()`),
+  # and must treat `skipped` as acceptable while treating `failure` and
+  # `cancelled` as not. `needs.<job>.result` holds the value you need.

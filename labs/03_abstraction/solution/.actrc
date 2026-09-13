@@ -1,0 +1,15 @@
+# Defaults for `act`, so `make ci-local` needs no flags.
+#
+# act runs jobs in Docker containers that approximate GitHub's runners. It is
+# an approximation: OIDC, most of the `github` context, the real cache backend
+# and GitHub-hosted service networking are not simulated. Use it to catch shell
+# and wiring mistakes in seconds; use a real run to prove the workflow works.
+
+# The default runner image is a stub with almost nothing installed.
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Apple Silicon runs amd64 images under emulation. Slower, but matches CI.
+--container-architecture linux/amd64
+
+# Without this, upload-artifact fails rather than being skipped.
+--artifact-server-path /tmp/act-artifacts

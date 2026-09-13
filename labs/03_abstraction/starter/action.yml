@@ -1,0 +1,44 @@
+# Lab 03 -- composite action (starter)
+#
+# A composite action bundles steps that always travel together. Three things
+# about it differ from a workflow, and all three are TODOs below.
+name: Set up service
+description: Install the toolchain and dependencies for one service in this repository.
+
+# TODO(lab-03-a1): This action is called for both services and needs to know
+# which one. Declare two inputs:
+#
+#   service  -- required, "api" or "worker"
+#   version  -- optional, the runtime version (Python for api, Node for worker)
+#
+# Inputs on a composite action have no `type:` -- they are always strings.
+# That is why the reusable workflow in TODO(lab-03-c) has to pass its matrix
+# as JSON.
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      # TODO(lab-03-a2): This step must only run for the api service. Gate it on
+      # the `service` input, and pass `version` through as the Python version
+      # with a sensible fallback when it is empty.
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: app/api/uv.lock
+
+    # TODO(lab-03-a2): Add the matching step for the worker: actions/setup-node,
+    # gated on the `service` input, with npm caching pointed at
+    # app/worker/package-lock.json and the node version taken from `version`.
+
+    - name: Install dependencies
+      # TODO(lab-03-a3): This step fails with "Required property is missing:
+      # shell". In a workflow, `run:` defaults to bash. In a composite action
+      # there is no default and every `run:` step must say which shell it uses.
+      #
+      # Note what this step does NOT need: a branch per service. Both services
+      # expose a `make install` target, so one step covers both. Making the
+      # services uniform is what removed the duplication here -- not making the
+      # YAML cleverer.
+      working-directory: app/${{ inputs.service }}
+      run: make install

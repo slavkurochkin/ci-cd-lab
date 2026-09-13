@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and set github_repo. That file is gitignored.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# github_repo is the only variable with no default, deliberately: it is the
+# condition that decides which repository may assume your deploy role, and a
+# default would be a default answer to "who is allowed into my cluster".
+
+github_repo = "your-github-username/ci-cd-lab"
+
+# Everything below is optional -- these are the defaults, shown so you can see
+# what you are paying for without reading variables.tf.
+
+# region             = "us-east-1"   # must match AWS_LAB_REGION
+# cluster_name       = "lab"         # `make eks-up` hardcodes this in update-kubeconfig
+# kubernetes_version = "1.31"
+# node_instance_type = "t3.medium"   # ~$0.0416/hr each
+# node_count         = 2             # ~$0.083/hr total
+# vpc_cidr           = "10.42.0.0/16"
+# table_name         = "lab-orders"

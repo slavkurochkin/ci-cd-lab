@@ -1,0 +1,6 @@
+title: Speed & Cost -- Caching, Matrices, Artifacts
+project: 2
+files:
+  - starter: starter/lab-02-ci.yml
+    target: .github/workflows/lab-02-ci.yml
+    solution: solution/lab-02-ci.yml

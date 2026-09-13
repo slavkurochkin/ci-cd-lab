@@ -1,0 +1,31 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node
+node_modules/
+coverage/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+# Never commit variable files -- they routinely hold account IDs and secrets.
+*.auto.tfvars
+terraform.tfvars
+
+# Local environment
+.env
+.env.local
+kubeconfig
+
+# macOS
+.DS_Store

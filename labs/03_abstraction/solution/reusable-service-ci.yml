@@ -1,0 +1,111 @@
+# Reusable workflow: the build contract for any service in this repository.
+#
+# It knows nothing about Python or Node. Every service exposes the same
+# Makefile targets, so the pipeline calls `make lint` and `make test` and the
+# service decides what those mean. Making the services uniform is what removed
+# the duplication -- not making the YAML cleverer.
+name: Reusable service CI
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Which service to build. Must match a directory under app/.
+        required: true
+        type: string
+      versions:
+        description: JSON array of runtime versions to test against.
+        required: false
+        type: string
+        default: '["default"]'
+      run-integration-tests:
+        description: Run the service's integration suite against a live dependency.
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      coverage-artifact:
+        description: Name of the uploaded coverage artifact.
+        value: ${{ jobs.test.outputs.coverage-artifact }}
+
+jobs:
+  test:
+    name: ${{ inputs.service }} (${{ matrix.version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # A matrix cannot be passed as an input -- inputs are strings, booleans or
+    # numbers. Passing JSON and unpacking it with fromJSON is the way through.
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJSON(inputs.versions) }}
+
+    # Safe only because this value does not depend on the matrix. An output that
+    # varied per leg would be last-writer-wins, and which leg wins is undefined.
+    outputs:
+      coverage-artifact: coverage-${{ inputs.service }}
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up ${{ inputs.service }}
+        uses: ./.github/actions/setup-service
+        with:
+          service: ${{ inputs.service }}
+          version: ${{ matrix.version != 'default' && matrix.version || '' }}
+
+      - name: Lint and format check
+        working-directory: app/${{ inputs.service }}
+        run: make lint
+
+      - name: Run tests
+        working-directory: app/${{ inputs.service }}
+        run: make test
+
+  integration:
+    name: ${{ inputs.service }} integration
+    if: inputs.run-integration-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Service containers run on the runner's Docker network, started before the
+    # first step. From a job running directly on the runner they are reached on
+    # localhost at the mapped port.
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:2.5.2
+        ports:
+          - 8000:8000
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up ${{ inputs.service }}
+        uses: ./.github/actions/setup-service
+        with:
+          service: ${{ inputs.service }}
+
+      # amazon/dynamodb-local ships no curl, wget or shell health tool, so
+      # `--health-cmd` has nothing to run inside the container. When an image
+      # cannot describe its own readiness, waiting for it is the job's problem.
+      - name: Wait for DynamoDB Local
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:8000; then
+              echo "ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::DynamoDB Local never became reachable on localhost:8000"
+          exit 1
+
+      - name: Run integration tests
+        working-directory: app/${{ inputs.service }}
+        env:
+          DYNAMODB_ENDPOINT: http://localhost:8000
+          AWS_REGION: us-east-1
+        run: make test-integration

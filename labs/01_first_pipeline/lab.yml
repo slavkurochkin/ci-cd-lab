@@ -1,0 +1,6 @@
+title: Pipelines & the Build Contract
+project: 1
+files:
+  - starter: starter/lab-01-ci.yml
+    target: .github/workflows/lab-01-ci.yml
+    solution: solution/lab-01-ci.yml

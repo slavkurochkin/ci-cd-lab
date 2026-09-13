@@ -1,0 +1,58 @@
+# Lab 01 -- Pipelines & the Build Contract
+#
+# This workflow is deliberately incomplete. Five TODOs stand between it and a
+# real build contract. Fix them in this file, then run:
+#
+#   make verify LAB=01
+#
+name: Lab 01 CI
+
+# TODO(lab-01-a): This workflow only runs when you press a button, which means
+# it protects nothing. Make it run on every pull request targeting `main`, and
+# on every push to `main`. Keep workflow_dispatch -- being able to run it by
+# hand is genuinely useful.
+on:
+  workflow_dispatch:
+
+jobs:
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    # TODO(lab-01-e): A job with no timeout can hang for six hours on a stuck
+    # network call, burning runner minutes the whole time. Give this job a
+    # timeout appropriate to a suite that takes seconds.
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        working-directory: app/api
+        run: uv sync --extra dev
+
+      # TODO(lab-01-c): The build contract for this repo is format, lint, and
+      # test. Only tests run here. Add a step that runs ruff -- both the lint
+      # check and the format check -- before the tests.
+
+      - name: Run tests
+        working-directory: app/api
+        # TODO(lab-01-b): `|| true` makes this step succeed no matter what the
+        # tests did. Find out what the job looks like in the Actions UI with
+        # this here, then remove it.
+        run: uv run pytest || true
+
+  # TODO(lab-01-d): This repository has two services and only one of them is
+  # covered. Add a `worker` job that does for app/worker what the api job does
+  # for app/api:
+  #
+  #   - check out the repository
+  #   - set up Node 22 using actions/setup-node
+  #   - install dependencies with `npm ci`
+  #   - run `npm run lint` and `npm run format:check`
+  #   - run `npm test`
+  #
+  # It must not depend on the api job -- the two services are independent, and
+  # you want both results from a single run, not the first failure.

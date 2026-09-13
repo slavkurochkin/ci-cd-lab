@@ -1,0 +1,15 @@
+title: Abstraction, Service Containers & the Local Loop
+project: 3
+files:
+  - starter: starter/action.yml
+    target: .github/actions/setup-service/action.yml
+    solution: solution/action.yml
+  - starter: starter/reusable-service-ci.yml
+    target: .github/workflows/reusable-service-ci.yml
+    solution: solution/reusable-service-ci.yml
+  - starter: starter/lab-03-ci.yml
+    target: .github/workflows/lab-03-ci.yml
+    solution: solution/lab-03-ci.yml
+  - starter: starter/.actrc
+    target: .actrc
+    solution: solution/.actrc

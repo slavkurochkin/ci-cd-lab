@@ -1,0 +1,18 @@
+[project]
+name = "ci-cd-lab-tooling"
+version = "0.1.0"
+description = "Verifier tooling for the CI/CD lab curriculum. Not the sample app -- see app/."
+requires-python = ">=3.11"
+dependencies = [
+    "pytest>=8.3.0",
+    "pyyaml>=6.0.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["scripts"]
+addopts = "-q --no-header -p no:cacheprovider"
+markers = [
+    "live_github: requires a pushed repo and an authenticated gh CLI",
+    "live_cluster: requires a running Kubernetes cluster",
+    "live_aws: requires authenticated AWS credentials",
+]

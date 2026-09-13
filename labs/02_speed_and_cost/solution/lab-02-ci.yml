@@ -1,0 +1,153 @@
+# Lab 02 -- Speed & Cost (solution)
+#
+# Same contract as Lab 01, roughly half the runner minutes: cached
+# dependencies, a matrix where the variation is genuinely homogeneous, path
+# filters so untouched services are not rebuilt, superseded runs cancelled,
+# and a single aggregate check that survives skipped jobs.
+name: Lab 02 CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One in-flight run per branch. `main` is keyed by run_id so pushes to main are
+# never cancelled -- those runs are the record of what was released.
+concurrency:
+  group: lab-02-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      worker: ${{ steps.filter.outputs.worker }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Detect which services changed
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            api:
+              - 'app/api/**'
+              - '.github/workflows/lab-02-ci.yml'
+            worker:
+              - 'app/worker/**'
+              - '.github/workflows/lab-02-ci.yml'
+
+  api:
+    name: api (py${{ matrix.python-version }})
+    needs: changes
+    # On push and workflow_dispatch there is no pull request to diff against,
+    # so paths-filter reports nothing changed. Outside a PR, build everything.
+    if: needs.changes.outputs.api == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: app/api/uv.lock
+
+      - name: Install dependencies
+        working-directory: app/api
+        run: uv sync --extra dev
+
+      - name: Lint and format check
+        working-directory: app/api
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Run tests
+        working-directory: app/api
+        run: uv run pytest --cov=api --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-api-py${{ matrix.python-version }}
+          path: app/api/coverage.xml
+          retention-days: 7
+
+  worker:
+    name: worker
+    needs: changes
+    if: needs.changes.outputs.worker == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/worker/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app/worker
+        run: npm ci
+
+      - name: Lint and format check
+        working-directory: app/worker
+        run: |
+          npm run lint
+          npm run format:check
+
+      - name: Run tests
+        working-directory: app/worker
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-worker
+          path: app/worker/coverage/lcov.info
+          retention-days: 7
+
+  # The single required status check. Runs even when its dependencies were
+  # skipped, so a path-filtered PR can still merge -- but fails if any
+  # dependency actually failed or was cancelled.
+  ci-passed:
+    name: ci-passed
+    needs: [api, worker]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check dependency results
+        env:
+          API_RESULT: ${{ needs.api.result }}
+          WORKER_RESULT: ${{ needs.worker.result }}
+        run: |
+          echo "api=$API_RESULT worker=$WORKER_RESULT"
+          for result in "$API_RESULT" "$WORKER_RESULT"; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::a required job reported '$result'"; exit 1 ;;
+            esac
+          done
+          echo "All required jobs succeeded or were skipped."

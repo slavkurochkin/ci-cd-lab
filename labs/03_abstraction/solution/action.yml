@@ -1,0 +1,41 @@
+# Composite action: toolchain, dependency cache, and install for one service.
+#
+# A composite action replaces *steps*. It cannot contain jobs, cannot set
+# `runs-on`, and every `run:` step must declare `shell:` explicitly -- the
+# default that workflows give you does not exist here.
+name: Set up service
+description: Install the toolchain and dependencies for one service in this repository.
+
+inputs:
+  service:
+    description: Which service to set up -- api or worker.
+    required: true
+  version:
+    description: Runtime version. Python for api, Node for worker.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      if: inputs.service == 'api'
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: ${{ inputs.version || '3.12' }}
+        enable-cache: true
+        cache-dependency-glob: app/api/uv.lock
+
+    - name: Set up Node
+      if: inputs.service == 'worker'
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.version || '22' }}
+        cache: npm
+        cache-dependency-path: app/worker/package-lock.json
+
+    # Uniform, because every service exposes the same `install` target.
+    - name: Install dependencies
+      shell: bash
+      working-directory: app/${{ inputs.service }}
+      run: make install
