@@ -92,7 +92,9 @@ The third is the one that catches everyone once, because it is invisible: the ma
 
 ### Artifacts vs cache
 
-They look similar and answer different questions.
+Both move files out of a job and both are configured with a `uses:` step, which is why they get confused. They answer opposite questions.
+
+**The rule: if this disappeared, would the run still be correct?** Yes → cache. No → artifact. A cache is an optimisation and must be safe to miss; an artifact is output and must be there.
 
 | | Cache | Artifact |
 |---|---|---|
@@ -101,9 +103,16 @@ They look similar and answer different questions.
 | Lifetime | evicted (7 days unused, 10 GB repo cap) | retained (default 90 days) |
 | Typical use | dependencies, build layers | test reports, coverage, binaries |
 
-The test: **if this disappeared, would the run still be correct?** Yes → cache. No → artifact.
+Getting the direction wrong is not symmetrical. Treating a cache as an artifact wastes storage; treating an artifact as a cache means the file your next job needs is sometimes simply absent, and the job fails on a Tuesday for no reason you changed.
 
-Two practical notes. On `upload-artifact@v4` an artifact name must be unique within a run — uploading the same name from three matrix legs is an error, not a merge. And `retention-days` defaults to 90; a coverage report you look at for ten minutes does not need three months of storage.
+Two ways the upload itself goes wrong:
+
+| | How it happens | What goes wrong | What you see |
+|---|---|---|---|
+| **Colliding names** | the same artifact name uploaded from every matrix leg | on `upload-artifact@v4` a name must be unique within a run — it is an error, not a merge | the run fails on the second leg to finish, so *which* leg fails varies between runs |
+| **Hoarding** | leaving `retention-days` at its default | every coverage report is kept for 90 days | nothing at all, until the storage quota does — artifacts bill against your account's storage, separately from the cache's 10 GB repo cap |
+
+The fix for the first is to put the matrix value in the name — `coverage-${{ matrix.python-version }}`, the same value that distinguishes the job. The fix for the second is to ask how long you would actually look: a coverage report you read for ten minutes does not need three months.
 
 ---
 
@@ -139,12 +148,18 @@ Path filters also behave differently outside a pull request. On `push` or `workf
 
 ### Concurrency: not paying for answers nobody reads
 
-Push three commits in a minute and you get three runs. You will read the last one. The `concurrency` block puts runs into a named group and cancels the superseded ones.
+Push three commits in a minute and you get three runs. You will read the last one. The other two finish into an empty room, and you paid for both.
 
-Two details decide whether it helps or hurts:
+A `concurrency` block puts runs into a named **group** and, with `cancel-in-progress: true`, kills the superseded ones. The group key is the entire design — it decides what counts as "superseded," and both ways of getting it wrong are worse than having no concurrency block at all.
 
-- **Key it on the branch.** A group key that does not vary by ref cancels unrelated branches, which is much worse than the problem you started with.
-- **Do not cancel `main`.** Runs on the default branch are the record that a released commit passed. Merge twice in quick succession and a branch-keyed group cancels the first, leaving a released commit with a cancelled run and no evidence. Make the key unique on `main` — `github.run_id` does it.
+| | How it happens | What goes wrong | What you see |
+|---|---|---|---|
+| **Key too broad** | a group key that does not vary by ref, e.g. a bare workflow name | every branch shares one group, so your colleague's push cancels your run | runs dying for no visible reason, blamed on flakiness for weeks |
+| **Cancelling `main`** | the same branch-keyed group applied to the default branch | merge twice in quick succession and the first merge's run is cancelled | a released commit whose only evidence is a cancelled run — neither pass nor fail |
+
+**The rule: key on the ref, and make `main` unique.** `github.ref` (or `github.head_ref` on a PR) scopes the group to one branch. For the default branch you want the opposite of cancellation — every merged commit deserves its own run, because that run *is* the record that the released commit passed. Adding `github.run_id` to the key on `main` makes each run its own group, so nothing can supersede it.
+
+The asymmetry is the point. On a feature branch the latest answer is the only one that matters. On `main` every answer is a permanent record, and a cancelled run is not a record of anything.
 
 ---
 
