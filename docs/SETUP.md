@@ -61,7 +61,7 @@ Docker Desktop is needed from Project 5 onward. Install it before then and leave
 **Tools:** `terraform`, `awscli`, `tflint`, `checkov`.
 
 ```bash
-brew install terraform awscli tflint checkov
+brew install hashicorp/tap/terraform terraform-linters/tap/tflint awscli checkov
 ```
 
 ### An AWS account

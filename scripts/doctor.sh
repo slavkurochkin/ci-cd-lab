@@ -21,8 +21,10 @@ check() {
       minikube)  version=$(minikube version --short 2>/dev/null) ;;
       terraform) version=$(terraform version -json 2>/dev/null | grep -o '"terraform_version": *"[^"]*"' | cut -d'"' -f4) ;;
       aws)       version=$(aws --version 2>&1 | awk '{print $1}' | cut -d/ -f2) ;;
-      helm)      version=$(helm version --short 2>/dev/null) ;;
+      helm)      version=$(helm version --short 2>/dev/null | cut -d+ -f1) ;;
       doppler)   version=$(doppler --version 2>/dev/null) ;;
+      argocd)    version=$(argocd version --client --short 2>/dev/null | awk '{print $2}' | cut -d+ -f1) ;;
+      cosign)    version=$(cosign version --json 2>/dev/null | grep -o '"gitVersion": *"[^"]*"' | cut -d'"' -f4) ;;
       *)         version=$("$name" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1) ;;
     esac
     printf '  %s✓%s %-12s %-10s %s%s%s\n' "$GREEN" "$RESET" "$name" "${version:-installed}" "$DIM" "$track" "$RESET"
@@ -46,9 +48,9 @@ check node      "app/worker"      "node"                       required
 check gh        "Track A  (1-5)"  "gh"                         required
 check actionlint "Track A  (1-5)" "actionlint"                 optional
 check docker    "Track A  (5+)"   "--cask docker"              optional
-check terraform "Track B, C (13)" "terraform"                  optional
+check terraform "Track B, C (13)" "hashicorp/tap/terraform"    optional
 check aws       "Track B, C (13)" "awscli"                     optional
-check tflint    "Track B  (8-9)"  "tflint"                     optional
+check tflint    "Track B  (8-9)"  "terraform-linters/tap/tflint" optional
 check checkov   "Track B  (9)"    "checkov"                    optional
 check kubectl   "Track C (10-14)" "kubernetes-cli"             optional
 check minikube  "Track C (10-12)" "minikube"                   optional
