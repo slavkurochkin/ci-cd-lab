@@ -13,6 +13,10 @@ name: Lab 01 CI
 # hand is genuinely useful.
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   api:
@@ -21,6 +25,7 @@ jobs:
     # TODO(lab-01-e): A job with no timeout can hang for six hours on a stuck
     # network call, burning runner minutes the whole time. Give this job a
     # timeout appropriate to a suite that takes seconds.
+    timeout-minutes: 10
 
     steps:
       - name: Check out the repository
@@ -36,14 +41,18 @@ jobs:
       # TODO(lab-01-c): The build contract for this repo is format, lint, and
       # test. Only tests run here. Add a step that runs ruff -- both the lint
       # check and the format check -- before the tests.
+      - name: Run ruff
+        working-directory: app/api
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
 
       - name: Run tests
         working-directory: app/api
         # TODO(lab-01-b): `|| true` makes this step succeed no matter what the
         # tests did. Find out what the job looks like in the Actions UI with
         # this here, then remove it.
-        run: uv run pytest || true
-
+        run: uv run pytest
   # TODO(lab-01-d): This repository has two services and only one of them is
   # covered. Add a `worker` job that does for app/worker what the api job does
   # for app/api:
@@ -56,3 +65,36 @@ jobs:
   #
   # It must not depend on the api job -- the two services are independent, and
   # you want both results from a single run, not the first failure.
+  worker:
+    name: worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          # setup-node resolves this relative to the repo root, not to any
+          # step's working-directory. Without it the action aborts looking for
+          # a lockfile that only exists one directory down.
+          cache-dependency-path: app/worker/package-lock.json
+      - name: Install dependencies
+        working-directory: app/worker
+        run: npm ci
+
+      - name: Run lint
+        working-directory: app/worker
+        run: npm run lint
+
+      - name: Run format
+        working-directory: app/worker
+        run: npm run format:check
+
+      - name: Run tests
+        working-directory: app/worker
+        run: npm test
