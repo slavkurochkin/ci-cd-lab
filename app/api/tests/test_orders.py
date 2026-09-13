@@ -8,7 +8,7 @@ def item(quantity: int = 1, unit_price: float = 10.0) -> LineItem:
 
 
 def test_subtotal_sums_line_items():
-    assert subtotal([item(2, 10.0), item(1, 5.5)]) == 99.9
+    assert subtotal([item(2, 10.0), item(1, 5.5)]) == 25.5
 
 
 def test_no_discount_below_bulk_threshold():
