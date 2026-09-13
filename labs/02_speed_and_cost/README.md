@@ -206,12 +206,25 @@ Fill this in now and again at the end:
 
 | | Baseline (Lab 01) | Optimized (Lab 02) |
 |---|---|---|
-| Wall-clock, cold cache | | |
-| Wall-clock, warm cache | | |
-| Total job-seconds | | |
-| Jobs run for an api-only change | | |
+| Wall-clock, cold cache | 16s | |
+| Wall-clock, warm cache | 14–17s (n=4) | |
+| Total job-seconds, cold | 20s — api 9s, worker 11s | |
+| Total job-seconds, warm | 21–23s (n=4) | |
+| Jobs run for an api-only change | 2 of 2, always | |
 
 Without the first column, "it feels faster" is all you will have.
+
+> **Read that baseline again before you start Task B.** The cold run is not
+> slower than the warm ones. At this size the 22 MiB of `node_modules` costs
+> about as much to download and unpack as it does to install from scratch, and
+> the cold run additionally pays to *save* the cache it just missed. Caching is
+> not free and it is not automatically a win — it trades network and disk for
+> compute, and which side wins depends on the size of your dependency tree.
+>
+> This does not make Task B pointless. It makes it measurable: do the task,
+> measure again, and be willing to conclude that one of the two caches earns
+> its keep and the other does not. A pipeline optimisation you cannot
+> demonstrate is a pipeline optimisation you should not keep.
 
 ---
 
