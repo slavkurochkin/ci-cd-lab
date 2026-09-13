@@ -40,16 +40,29 @@ The shape to aim for is a **diamond**: fan out wide, then converge on one aggreg
 
 ### Caching: the key is the whole design
 
-A cache maps a **key** to a saved directory. On a hit, the directory is restored and you skip the work that would have produced it. Getting the key wrong fails in two directions, and both are quiet:
+A cache is a lookup dictionary. It saves a directory — usually your installed dependencies — under a **key**, so a later run can restore it instead of doing the work again.
 
-- **Too specific** (keyed on the commit SHA) — never hits. You pay the save cost on every run and get nothing back. The step is green.
-- **Too loose** (keyed on a constant) — always hits, and serves stale dependencies forever. The step is green, and now your CI is testing a lockfile nobody has.
+**The rule: key on a hash of the lock file.** When dependencies change, the lock file changes, the hash changes, and you get a new key — which is precisely when you *want* the old cache thrown away. Any other key is wrong in one of two directions, and the important thing is that **both look green**:
 
-The rule: **key on the thing whose change should invalidate the cache**, which for dependencies is the lock file's hash. `restore-keys` then gives you a prefix fallback — a partial cache from a previous lock file is usually far better than nothing, because most dependencies did not change.
+| | How it happens | What goes wrong | What you see |
+|---|---|---|---|
+| **Too specific** | keyed on the commit SHA — `cache-${{ github.sha }}` | every commit mints a new key, so no run ever finds a prior cache | green check, full save cost on every run, zero time saved |
+| **Too loose** | keyed on a constant — `cache-v1` | the key never changes, even when dependencies do | green check, and CI is testing a lockfile nobody has |
 
-There is a second trap specific to monorepos. Both `actions/setup-node` and `astral-sh/setup-uv` look for a lock file in the repository root by default. This repo has none — the lock files are inside `app/api/` and `app/worker/`. Point the action at the right file explicitly or it caches nothing while reporting success.
+Neither failure produces a red X. A cache step that is silently useless and one that is silently lying are indistinguishable from the run summary — you have to read the restore log or compare timings to tell.
 
-Cache scope on GitHub has rules worth knowing: a branch can read caches from itself and from the default branch, but **not** from sibling branches. So the first run on a new branch usually misses unless `main` has warmed the cache.
+`restore-keys` softens the first case: it gives a **prefix fallback**, so when the exact hash misses you still restore the closest older cache and reinstall only what moved. Most dependencies do not change in any given commit, which is what makes a partial hit worth far more than nothing.
+
+**The monorepo trap.** `actions/setup-node` and `astral-sh/setup-uv` both look for a lock file in the **repository root** by default. This repo has none — they live in `app/api/` and `app/worker/`. The setting is spelled differently for each, which is its own small trap:
+
+| Action | Input |
+|---|---|
+| `actions/setup-node` | `cache-dependency-path` |
+| `astral-sh/setup-uv` | `cache-dependency-glob` |
+
+Note that `working-directory` does **not** help here. It governs `run:` steps; it has no effect on where a `uses:` action looks for files. Get this wrong and the action reports success while caching nothing — the same failure you met in Lab 01, where the worker job could not find `app/worker/package-lock.json`.
+
+**Scope.** A branch can read caches from itself and from the default branch, but **not** from sibling branches. So the first run on a new branch usually misses unless `main` has already warmed it.
 
 > Further reading: [GitHub Docs — Caching dependencies to speed up workflows](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/cache-dependencies)
 
