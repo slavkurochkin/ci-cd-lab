@@ -171,16 +171,35 @@ make lab LAB=02
 
 That writes `.github/workflows/lab-02-ci.yml`, which starts as a copy of Lab 01's finished pipeline. Lab 01's workflow stays where it is: keeping both lets you compare them run for run.
 
-**Record your baseline before you change anything.** Push the branch, let both workflows run once, and write down the numbers:
+**Record your baseline before you change anything.** Push the branch, let both workflows run once, and write down the numbers.
+
+List recent runs **with their IDs** — you need one for the next command:
 
 ```bash
 gh run list --workflow lab-01-ci.yml --limit 5 \
-  --json displayTitle,conclusion,createdAt,updatedAt \
-  --jq '.[] | "\(.conclusion)  \(.displayTitle)"'
+  --json databaseId,conclusion,displayTitle \
+  --jq '.[] | "\(.databaseId)  \(.conclusion)  \(.displayTitle[0:50])"'
+```
 
-# wall-clock and billable minutes for a specific run
-gh run view <run-id> --json jobs \
-  --jq '.jobs[] | "\(.name)  \(.startedAt)  \(.completedAt)"'
+Then measure one run. This prints each job's duration and the totals, so you do not have to subtract timestamps by hand — substitute a real ID for `RUN_ID`:
+
+```bash
+RUN_ID=34735066921   # <- from the list above
+
+gh run view "$RUN_ID" --json jobs,createdAt,updatedAt --jq '
+  (.jobs | map((.completedAt|fromdate) - (.startedAt|fromdate))) as $d |
+  "wall-clock: \((.updatedAt|fromdate)-(.createdAt|fromdate))s",
+  "job-seconds: \($d|add)s across \($d|length) jobs",
+  (.jobs[] | "  \(.name): \(((.completedAt|fromdate)-(.startedAt|fromdate)))s")'
+```
+
+**Wall-clock and job-seconds are different numbers and they move for different reasons.** Wall-clock includes time queueing for a runner, which you do not control and which varies by an order of magnitude — a run measured at 46s of wall-clock can be 24s of work and 22s of waiting. Job-seconds is what you are billed for and what this lab's changes actually move. Record both; judge by the second.
+
+Cold-cache numbers need a cold cache. GitHub keeps caches for seven days, so an ordinary re-run is warm:
+
+```bash
+gh cache list                 # what is currently stored
+gh cache delete --all         # then re-run to measure cold
 ```
 
 Fill this in now and again at the end:
@@ -189,7 +208,7 @@ Fill this in now and again at the end:
 |---|---|---|
 | Wall-clock, cold cache | | |
 | Wall-clock, warm cache | | |
-| Total job-minutes | | |
+| Total job-seconds | | |
 | Jobs run for an api-only change | | |
 
 Without the first column, "it feels faster" is all you will have.
