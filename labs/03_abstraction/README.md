@@ -46,10 +46,14 @@ Two mechanisms, and the choice between them is not a matter of taste.
 
 The rule: **if what repeats is a sequence of steps inside one job, write a composite action. If what repeats is a whole job — or several — write a reusable workflow.** This lab uses both, because both kinds of repetition exist: setting up a toolchain is steps, and the whole lint/test/upload shape is a job.
 
-Two things about composite actions catch everyone once:
+Two things about composite actions catch everyone once, and only one of them is loud:
 
-- **Every `run:` step must declare `shell:`.** Workflows default it to bash; composite actions have no default, and the error message (`Required property is missing: shell`) does not appear until the action runs.
-- **Inputs are always strings.** There is no `type:` on a composite action input. `if: inputs.enabled == 'true'` compares strings, and `if: inputs.enabled` is true for the string `"false"`.
+| | How it happens | What goes wrong | What you see |
+|---|---|---|---|
+| **Missing `shell:`** | a `run:` step written the way you would write it in a workflow | workflows default `shell` to bash; composite actions have no default | `Required property is missing: shell` — but not until the action *runs*, so a green lint gives you no warning |
+| **Inputs are strings** | `if: inputs.enabled`, treating an input as a boolean | there is no `type:` on a composite action input, so every value arrives as a string | nothing — `"false"` is a non-empty string and therefore truthy, so the step you meant to disable runs, silently, forever |
+
+The second is the dangerous one. Compare explicitly — `if: inputs.enabled == 'true'` — and note that this is the **opposite** of `workflow_call` inputs, which are typed and where `type:` is mandatory. There is no way to remember which is which except by meeting both errors.
 
 > Further reading: [GitHub Docs — Reusing workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
 
@@ -130,13 +134,17 @@ The default loop for a workflow change is commit → push → wait → read logs
 
 [`act`](https://github.com/nektos/act) runs workflow jobs in Docker containers on your laptop. Configured through `.actrc`, `make ci-local JOB=api` gives you a result in seconds.
 
-**Know what it cannot do before you trust it.** act approximates the runner; it does not reproduce it:
+**The rule: act is for shape, not for truth.** It will tell you a shell line is wrong in ten seconds. It will not tell you your pipeline works. Five things it approximates rather than reproduces, and what each one will wrongly convince you of:
 
-- **OIDC token minting** does not work — everything in Project 4 needs a real run
-- **Most of the `github` context** is synthetic: no real PR number, no real event payload
-- **The Actions cache backend** is not the real one, so cache-hit behaviour proves nothing
-- **`services:` networking** works but differs from GitHub's
-- **The runner image is not GitHub's image**, so "tool not found" may be act's fault or yours
+| What act fakes | What you might wrongly conclude |
+|---|---|
+| **OIDC token minting** — does not work at all | nothing; this one fails loudly. Everything in Project 4 needs a real run |
+| **The `github` context** — mostly synthetic, no real PR number or event payload | that your `if:` conditions and path filters work, when they were evaluated against invented data |
+| **The Actions cache backend** — not the real one | that your cache key hits. Cache-hit behaviour under act proves nothing either way |
+| **`services:` networking** — works, but differs from GitHub's | that your integration tests will connect in CI, when the hostname resolves differently there |
+| **The runner image** — not GitHub's image | that a tool is missing from the pipeline, when it is missing from act. `command not found` here is ambiguous |
+
+The pattern: act's failures are usually real, but act's *successes* are only evidence about syntax and step ordering. Treat a green act run as "worth pushing now," never as "this works."
 
 Which gives the honest division of labour: **act tells you the workflow is wired correctly. Only a real run tells you it works.** The fallback when act will not do is `workflow_dispatch` on a branch — still a push, but no PR ceremony.
 
