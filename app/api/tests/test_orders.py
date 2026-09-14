@@ -11,6 +11,14 @@ def test_subtotal_sums_line_items():
     assert subtotal([item(2, 10.0), item(1, 5.5)]) == 25.5
 
 
+def test_subtotal_of_no_items_is_zero():
+    # subtotal() is total, not validation: an empty list is 0.0, not an error.
+    # price_order() is where emptiness is rejected -- see
+    # test_empty_order_rejected. Keeping the two distinct is what lets
+    # subtotal() be reused on a partial basket.
+    assert subtotal([]) == 0.0
+
+
 def test_no_discount_below_bulk_threshold():
     assert price_order([item(9, 1.0)])["discount"] == 0.0
 
