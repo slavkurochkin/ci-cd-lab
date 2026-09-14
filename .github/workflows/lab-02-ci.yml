@@ -22,6 +22,10 @@ on:
 # branches never do, and cancel the superseded run instead of finishing it.
 # Take care that this does not cancel runs on `main`.
 
+concurrency:
+  group: lab-02-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # TODO(lab-02-d): Add a `changes` job here that detects which parts of the
   # repository a pull request actually touched, and exposes the answer as job
@@ -39,9 +43,36 @@ jobs:
   # Read the note about `ci-passed` in TODO(lab-02-f) before you do this -- a
   # skipped job and a successful job are different states, and required status
   # checks only accept one of them.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      worker: ${{ steps.filter.outputs.worker }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Detect which services changed
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            api:
+              - 'app/api/**'
+              - '.github/workflows/lab-02-ci.yml'
+            worker:
+              - 'app/worker/**'
+              - '.github/workflows/lab-02-ci.yml'
 
   api:
-    name: api
+    name: api (py${{ matrix.python-version }})
+    needs: changes
+    # On a pull request the filters are meaningful. On push/workflow_dispatch
+    # there is no base to diff against, every filter reports false, and every
+    # job would skip -- so build everything outside a PR.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -55,6 +86,10 @@ jobs:
     #
     # Remember to update the job `name:` so each matrix leg is distinguishable
     # in the checks list, and pass the version through to setup-uv.
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       - name: Check out the repository
@@ -66,6 +101,10 @@ jobs:
         # scratch. setup-uv can restore uv's download cache between runs --
         # enable it, and key the cache on the lock file so it is invalidated
         # exactly when dependencies change and never otherwise.
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: app/api/uv.lock
 
       - name: Install dependencies
         working-directory: app/api
@@ -79,7 +118,7 @@ jobs:
 
       - name: Run tests
         working-directory: app/api
-        run: uv run pytest
+        run: uv run pytest --cov=api --cov-report=xml --cov-report=term
         # TODO(lab-02-e): Produce a coverage report here (pytest-cov is already
         # a dev dependency) and upload it with actions/upload-artifact so the
         # numbers survive the runner being destroyed. Give it a name that stays
@@ -87,8 +126,20 @@ jobs:
         # of 90 days is storage you are paying attention to for about ten
         # minutes.
 
+      - name: Upload coverage
+        # Without this the upload is skipped whenever the tests fail, which is
+        # precisely the run whose coverage you wanted to look at.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-api-py${{ matrix.python-version }}
+          path: app/api/coverage.xml
+          retention-days: 7
+
   worker:
     name: worker
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.worker == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -104,6 +155,8 @@ jobs:
           # point it at this service's lock file -- without an explicit
           # dependency path it looks in the repository root, finds nothing, and
           # caches nothing while still appearing to work.
+          cache: npm
+          cache-dependency-path: app/worker/package-lock.json
 
       - name: Install dependencies
         working-directory: app/worker
@@ -131,3 +184,34 @@ jobs:
   # So this job must run even when its dependencies did not (`if: always()`),
   # and must treat `skipped` as acceptable while treating `failure` and
   # `cancelled` as not. `needs.<job>.result` holds the value you need.
+
+  ci-passed:
+    name: ci-passed
+    needs: [api, worker]
+    # `always()` so this job still runs when a dependency was skipped -- which
+    # is the whole reason it exists. On its own, though, `always()` would make
+    # the job pass unconditionally, so the body below does the actual checking.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check the services
+        env:
+          API: ${{ needs.api.result }}
+          WORKER: ${{ needs.worker.result }}
+        run: |
+          set -euo pipefail
+          echo "api=$API worker=$WORKER"
+
+          # `skipped` means the path filters decided this service was not
+          # touched -- that is a pass. `failure` and `cancelled` are not.
+          status=0
+          for job in API WORKER; do
+            result="${!job}"
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::$job is $result"; status=1 ;;
+            esac
+          done
+          exit $status
