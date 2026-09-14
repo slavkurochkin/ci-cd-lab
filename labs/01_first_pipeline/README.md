@@ -12,7 +12,7 @@
 
 CI is often described as "running tests automatically," which undersells it. The guarantee is narrower and more useful: **every change is verified against the same contract, in the same environment, before it becomes part of the mainline.** The value is not that tests run — you could run them locally. The value is that they run somewhere you do not control, on a machine with none of your local state, on every change without exception.
 
-That last clause is doing the work. A check that runs on most changes is not a contract; it is a suggestion. The failure mode is not "CI is broken," it is "CI is green and the mainline is broken anyway," which is worse because it teaches people to trust a signal that is not load-bearing.
+That last clause is doing the work. A check that runs on most changes is not a contract; it is a suggestion. The failure mode is not "CI is broken," it is "CI is green and the mainline is broken anyway," which is worse, because it teaches people to trust a signal that does not hold.
 
 > Further reading: [Martin Fowler — Continuous Integration](https://martinfowler.com/articles/continuousIntegration.html)
 
@@ -65,7 +65,7 @@ The `on:` block decides when a workflow runs. Four triggers cover almost everyth
 | **`pull_request` alone** | it feels sufficient — the PR is where review happens | a PR is tested as a *simulated merge* into `main` **as of when CI ran**. Someone else merging in the meantime invalidates it, and two individually-green PRs can merge into a broken `main` — a **semantic conflict** | every PR green, `main` broken, and no single commit to blame |
 | **`workflow_dispatch` alone** | the workflow is written but never attached to an event | nothing runs unless a human presses a button, and nobody presses it | an Actions tab that looks healthy because it is empty |
 
-The second is the state this lab hands you in Task A. Look at the Actions tab before you change it — an unattached pipeline is indistinguishable from no pipeline, and considerably more reassuring.
+The second is the state this lab hands you in Task A. Look at the Actions tab before you change it. An unattached pipeline looks the same as no pipeline, and is more reassuring than one.
 
 > Further reading: [GitHub Docs — Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
 
@@ -102,13 +102,13 @@ The step shows a green tick. The job shows a green tick. The PR shows a passing 
 |---|---|---|---|
 | **`\|\| true`** | appended to silence a noisy step "for now" | the shell's exit code becomes 0 regardless of the command's | green |
 | **`continue-on-error: true`** | added to unblock a branch, never removed | the step is allowed to fail without failing the job | green, with a small warning icon almost nobody reads |
-| **A suite that collects nothing** | a renamed directory, a bad marker, a wrong `working-directory` | pytest exits 0 when it runs zero tests; so do most runners | green, and *faster than usual* — the only visible symptom |
+| **A suite that collects nothing** | a renamed directory, a bad marker, a wrong `working-directory` | pytest exits 0 when it runs zero tests, and so do most runners | green, and *faster than usual*, which is the only visible symptom |
 | **A script without `set -e`** | several commands in one `run:` block | shells do not stop on error; only the **last** command's exit code becomes the step's | green, when the failure was three lines from the end |
-| **`if: always()` on a step** | copied from an upload step that genuinely needs it | the step runs after a failure, and its own success masks the earlier one | green |
+| **`if: always()` on a step** | copied from an upload step that needs it | the step runs after a failure, and its own success masks the earlier one | green |
 
-Four of the five look identical from the outside: a passing check. The third is the only one with a tell, and the tell is that your pipeline got *faster* — which reads as good news.
+Four of the five look identical from the outside: a passing check. Only the third has a tell, and the tell is that your pipeline got *faster*, which reads as good news.
 
-This is why the question is about failure rather than success. "Did this pass?" has the same answer in all five rows. "What would make this fail?" has no answer in any of them.
+That is why the question is about failure rather than success. "Did this pass?" has the same answer in all five rows. "What would make this fail?" has no answer in any of them.
 
 ---
 
@@ -120,14 +120,14 @@ The link between them is the **check name**, which is the job's `name:` (or its 
 
 This coupling has a sharp edge you will meet in Lab 02: if you add path filters so a job is *skipped* rather than run, a required check that never reports leaves the PR blocked forever. Skipped and successful are different states, and branch protection only accepts one of them.
 
-**Protection is a policy, and policies have an override.** With `enforce_admins: false` — what Task F sets, deliberately — a repository admin can still merge over a red X, and a direct `git push` to `main` succeeds with nothing but a line in the output:
+**Protection is a policy, and policies have an override.** Task F sets `enforce_admins: false` on purpose. A repository admin can still merge over a red X, and a direct `git push` to `main` succeeds with nothing but a line in the output:
 
 ```
 remote: Bypassed rule violations for refs/heads/main:
 remote: - 2 of 2 required status checks are expected.
 ```
 
-No extra flag, no confirmation, no `--force`. The same protection that made a failing test un-mergeable through a PR is a normal push away from irrelevant. Notice how little friction that is, and notice that the bypass is recorded — which is the only reason it is defensible at all.
+No extra flag, no confirmation, no `--force`. The same protection that made a failing test un-mergeable through a PR is one normal push away from irrelevant. Notice how little friction that is. Notice also that the bypass is recorded, which is the only reason it is defensible.
 
 > Further reading: [GitHub Docs — About protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 

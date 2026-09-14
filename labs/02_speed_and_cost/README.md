@@ -49,20 +49,20 @@ A cache is a lookup dictionary. It saves a directory — usually your installed 
 | **Too specific** | keyed on the commit SHA — `cache-${{ github.sha }}` | every commit mints a new key, so no run ever finds a prior cache | green check, full save cost on every run, zero time saved |
 | **Too loose** | keyed on a constant — `cache-v1` | the key never changes, even when dependencies do | green check, and CI is testing a lockfile nobody has |
 
-Neither failure produces a red X. A cache step that is silently useless and one that is silently lying are indistinguishable from the run summary — you have to read the restore log or compare timings to tell.
+Neither produces a red X. A cache that never hits and a cache serving stale dependencies look the same from the run summary. You have to read the restore log or compare timings to tell them apart.
 
-`restore-keys` softens the first case: it gives a **prefix fallback**, so when the exact hash misses you still restore the closest older cache and reinstall only what moved. Most dependencies do not change in any given commit, which is what makes a partial hit worth far more than nothing.
+`restore-keys` softens the first case. It gives a **prefix fallback**: when the exact hash misses, you restore the closest older cache and reinstall only what moved. Most dependencies do not change in a given commit, so a partial hit is worth much more than nothing.
 
-**The monorepo trap.** `actions/setup-node` and `astral-sh/setup-uv` both look for a lock file in the **repository root** by default. This repo has none — they live in `app/api/` and `app/worker/`. The setting is spelled differently for each, which is its own small trap:
+**The monorepo trap.** `actions/setup-node` and `astral-sh/setup-uv` both look for a lock file in the **repository root** by default. This repo has none; they live in `app/api/` and `app/worker/`. Each action spells the setting differently:
 
 | Action | Input |
 |---|---|
 | `actions/setup-node` | `cache-dependency-path` |
 | `astral-sh/setup-uv` | `cache-dependency-glob` |
 
-Note that `working-directory` does **not** help here. It governs `run:` steps; it has no effect on where a `uses:` action looks for files. Get this wrong and the action reports success while caching nothing — the same failure you met in Lab 01, where the worker job could not find `app/worker/package-lock.json`.
+`working-directory` does **not** help here. It governs `run:` steps and has no effect on where a `uses:` action looks for files. Get this wrong and the action reports success while caching nothing. This is the failure you met in Lab 01, where the worker job could not find `app/worker/package-lock.json`.
 
-**Scope.** A branch can read caches from itself and from the default branch, but **not** from sibling branches. So the first run on a new branch usually misses unless `main` has already warmed it.
+**Scope.** A branch reads caches from itself and from the default branch, never from sibling branches. The first run on a new branch usually misses unless `main` has already warmed it.
 
 > Further reading: [GitHub Docs — Caching dependencies to speed up workflows](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/cache-dependencies)
 
@@ -72,7 +72,7 @@ Note that `working-directory` does **not** help here. It governs `run:` steps; i
 
 A **matrix** expands one job definition into many, one per combination — the same steps run against a different Python version, OS, or database engine.
 
-**The rule: a matrix is for homogeneous variation.** The moment the legs need different commands, it is the wrong tool. You can force it with `include:` and a per-entry command string, but you end up with a job whose steps are data — which no linter can check and no reader can follow. That is why this lab matrices the API over three Python versions and leaves the worker as its own job: **three Python versions are the same thing three times; a Python service and a Node service are two different things.**
+**The rule: a matrix is for homogeneous variation.** The moment the legs need different commands, it is the wrong tool. You can force it with `include:` and a per-entry command string, but then the job's steps are data. No linter can check them and no reader can follow them. That is why this lab matrices the API over three Python versions and leaves the worker as its own job: **three Python versions are the same thing three times; a Python service and a Node service are two different things.**
 
 Three settings decide whether a matrix produces information or just a bill:
 
@@ -82,9 +82,9 @@ Three settings decide whether a matrix produces information or just a bill:
 | **`name:` includes the value** | labels each leg, e.g. `api (3.12)` | the checks list shows N identical rows and you cannot tell which one is red |
 | **something references `matrix.<value>`** | actually varies the environment | N identical jobs at N times the cost, all green, all testing the same default version |
 
-The third is the one that catches everyone once, because it is invisible: the matrix expands, the UI shows three legs, they all pass, and nothing was ever tested twice.
+The third catches everyone once, because it is invisible. The matrix expands, the UI shows three legs, they all pass, and nothing was tested twice.
 
-**Cost is part of the design.** Three Python versions is three times the runner-minutes, forever, on every push. Matrix the versions you actually support and would act on a failure in — typically your lowest supported version and the current release — not every version that exists. A leg whose failure would not change what you do is a leg you are paying to ignore.
+**Cost is part of the design.** Three Python versions is three times the runner-minutes, on every push, forever. Only matrix versions you would fix a failure in. That is usually your lowest supported version and the current release, not every version that exists.
 
 > Further reading: [GitHub Docs — Running variations of jobs in a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations)
 
@@ -103,7 +103,7 @@ Both move files out of a job and both are configured with a `uses:` step, which 
 | Lifetime | evicted (7 days unused, 10 GB repo cap) | retained (default 90 days) |
 | Typical use | dependencies, build layers | test reports, coverage, binaries |
 
-Getting the direction wrong is not symmetrical. Treating a cache as an artifact wastes storage; treating an artifact as a cache means the file your next job needs is sometimes simply absent, and the job fails on a Tuesday for no reason you changed.
+The two mistakes do not cost the same. Treating a cache as an artifact wastes storage. Treating an artifact as a cache means the file your next job needs is sometimes missing, so the job fails intermittently with nothing in your diff to explain it.
 
 Two ways the upload itself goes wrong:
 
@@ -112,26 +112,26 @@ Two ways the upload itself goes wrong:
 | **Colliding names** | the same artifact name uploaded from every matrix leg | on `upload-artifact@v4` a name must be unique within a run — it is an error, not a merge | the run fails on the second leg to finish, so *which* leg fails varies between runs |
 | **Hoarding** | leaving `retention-days` at its default | every coverage report is kept for 90 days | nothing at all, until the storage quota does — artifacts bill against your account's storage, separately from the cache's 10 GB repo cap |
 
-The fix for the first is to put the matrix value in the name — `coverage-${{ matrix.python-version }}`, the same value that distinguishes the job. The fix for the second is to ask how long you would actually look: a coverage report you read for ten minutes does not need three months.
+Fix the first by putting the matrix value in the name: `coverage-${{ matrix.python-version }}`, the same value that distinguishes the job. Fix the second by asking how long you would look at the file. A coverage report you read for ten minutes does not need three months.
 
 ---
 
 ### Path filters and the skipped-check trap
 
-In a monorepo most changes touch one service, and building the other is pure waste. **Path filtering** removes it — and combined with branch protection it introduces the quietest failure mode in this curriculum.
+In a monorepo most changes touch one service, and building the other is waste. **Path filtering** removes it. Combined with branch protection, it also introduces the quietest failure in this curriculum.
 
 **The rule: never require a path-filtered job.** Gate the service jobs on change detection, add an aggregate job that inspects their results, and require only the aggregate. Everything below is why.
 
-The first instinct — `on: pull_request: paths:` — is the wrong tool: it filters the **entire workflow**, so nothing runs and nothing reports. What you want is a small `changes` job that computes what moved and exposes it as outputs, with the service jobs gated by `if:`. That works, and it leads straight into two failures that are opposites of each other:
+The first instinct, `on: pull_request: paths:`, is the wrong tool. It filters the **entire workflow**, so nothing runs and nothing reports. What you want is a small `changes` job that computes what moved and exposes it as outputs, with the service jobs gated by `if:`. That works, and it leads straight into two failures that are opposites of each other:
 
 | | How it happens | What goes wrong | What you see |
 |---|---|---|---|
 | **Pending forever** | a path-filtered job (`worker`) is a required check | a PR touching only `app/api` skips `worker`, and a skipped job never reports a status | the check sits *Expected*, the merge button never unlocks, and there is no red X to fix |
-| **False-positive green** | `if: always()` on the aggregate with no result check | the job runs even when its dependencies failed, checks nothing, and exits 0 | a green tick that means nothing — `\|\| true` from Lab 01 in a better suit |
+| **False-positive green** | `if: always()` on the aggregate with no result check | the job runs even when its dependencies failed, checks nothing, and exits 0 | a green tick that means nothing, the same failure as `\|\| true` in Lab 01 |
 
 > **A skipped job never reports a status. A required status check that never reports blocks the pull request forever.**
 
-Skipped and successful are different states and branch protection accepts only one of them. Grey is neither green nor red, and that third state is the whole problem.
+Skipped and successful are different states, and branch protection accepts only one of them. Grey is neither green nor red, and that third state is the problem.
 
 **The aggregate pattern, in order:**
 
@@ -140,26 +140,26 @@ Skipped and successful are different states and branch protection accepts only o
 3. **Aggregate.** One `ci-passed` job, `needs:` everything, `if: always()` so it runs even when its dependencies did not, and a body that reads `needs.<job>.result` — treating `skipped` as fine and `failure` or `cancelled` as not.
 4. **Require.** Mark `ci-passed` as the only required check, and remove the service jobs from protection.
 
-Step 3 is load-bearing in both halves. `if: always()` without the result check is the false-positive green above; the result check without `always()` never runs at all.
+Step 3 matters in both halves. `if: always()` without the result check gives you the false-positive green above. The result check without `always()` never runs.
 
-Path filters also behave differently outside a pull request. On `push` or `workflow_dispatch` there is no base branch to diff against, so the filters report nothing changed and every job skips. On `main` you want the opposite — build everything — so your `if:` has to handle the non-PR case explicitly.
+Path filters behave differently outside a pull request. On `push` or `workflow_dispatch` there is no base branch to diff against, so the filters report nothing changed and every job skips. On `main` you want the opposite, so your `if:` has to handle the non-PR case explicitly.
 
 ---
 
 ### Concurrency: not paying for answers nobody reads
 
-Push three commits in a minute and you get three runs. You will read the last one. The other two finish into an empty room, and you paid for both.
+Push three commits in a minute and you get three runs. You will read the last one. Nobody looks at the other two, and you paid for both.
 
-A `concurrency` block puts runs into a named **group** and, with `cancel-in-progress: true`, kills the superseded ones. The group key is the entire design — it decides what counts as "superseded," and both ways of getting it wrong are worse than having no concurrency block at all.
+A `concurrency` block puts runs into a named **group** and, with `cancel-in-progress: true`, kills the superseded ones. The group key decides what counts as superseded. Both ways of getting it wrong are worse than having no concurrency block at all.
 
 | | How it happens | What goes wrong | What you see |
 |---|---|---|---|
 | **Key too broad** | a group key that does not vary by ref, e.g. a bare workflow name | every branch shares one group, so your colleague's push cancels your run | runs dying for no visible reason, blamed on flakiness for weeks |
 | **Cancelling `main`** | the same branch-keyed group applied to the default branch | merge twice in quick succession and the first merge's run is cancelled | a released commit whose only evidence is a cancelled run — neither pass nor fail |
 
-**The rule: key on the ref, and make `main` unique.** `github.ref` (or `github.head_ref` on a PR) scopes the group to one branch. For the default branch you want the opposite of cancellation — every merged commit deserves its own run, because that run *is* the record that the released commit passed. Adding `github.run_id` to the key on `main` makes each run its own group, so nothing can supersede it.
+**The rule: key on the ref, and make `main` unique.** `github.ref` (or `github.head_ref` on a PR) scopes the group to one branch. On the default branch you want the opposite of cancellation. Every merged commit needs its own run, because that run is the record that the released commit passed. Adding `github.run_id` to the key on `main` puts each run in its own group, so nothing can supersede it.
 
-The asymmetry is the point. On a feature branch the latest answer is the only one that matters. On `main` every answer is a permanent record, and a cancelled run is not a record of anything.
+On a feature branch the latest answer is the only one that matters. On `main` every answer is a permanent record, and a cancelled run records nothing.
 
 ---
 
@@ -181,7 +181,7 @@ gh run list --workflow lab-01-ci.yml --limit 5 \
   --jq '.[] | "\(.databaseId)  \(.conclusion)  \(.displayTitle[0:50])"'
 ```
 
-Then measure one run. This prints each job's duration and the totals, so you do not have to subtract timestamps by hand — substitute a real ID for `RUN_ID`:
+Then measure one run. This prints each job's duration and the totals, so you do not have to subtract timestamps by hand. Substitute a real ID for `RUN_ID`:
 
 ```bash
 RUN_ID=34735066921   # <- from the list above
@@ -193,7 +193,7 @@ gh run view "$RUN_ID" --json jobs,createdAt,updatedAt --jq '
   (.jobs[] | "  \(.name): \(((.completedAt|fromdate)-(.startedAt|fromdate)))s")'
 ```
 
-**Wall-clock and job-seconds are different numbers and they move for different reasons.** Wall-clock includes time queueing for a runner, which you do not control and which varies by an order of magnitude — a run measured at 46s of wall-clock can be 24s of work and 22s of waiting. Job-seconds is what you are billed for and what this lab's changes actually move. Record both; judge by the second.
+**Wall-clock and job-seconds move for different reasons.** Wall-clock includes time spent queueing for a runner, which you do not control and which varies widely. A run measured at 46s of wall-clock can be 24s of work and 22s of waiting. Job-seconds is what you are billed for and what this lab's changes move. Record both, judge by the second.
 
 Cold-cache numbers need a cold cache. GitHub keeps caches for seven days, so an ordinary re-run is warm:
 
@@ -216,22 +216,21 @@ Fill this in now and again at the end:
 Without the first column, "it feels faster" is all you will have.
 
 > **Read that baseline again before you start Task B.** The cold run is not
-> slower than the warm ones. At this size the 22 MiB of `node_modules` costs
-> about as much to download and unpack as it does to install from scratch, and
-> the cold run additionally pays to *save* the cache it just missed. Caching is
-> not free and it is not automatically a win — it trades network and disk for
-> compute, and which side wins depends on the size of your dependency tree.
+> slower than the warm ones. At this size, 22 MiB of `node_modules` costs about
+> as much to download and unpack as to install from scratch, and the cold run
+> also pays to save the cache it missed. Caching is not free and not
+> automatically a win. It trades network and disk for compute, and which side
+> wins depends on the size of your dependency tree.
 >
-> This does not make Task B pointless. It makes it measurable: do the task,
-> measure again, and be willing to conclude that one of the two caches earns
-> its keep and the other does not. A pipeline optimisation you cannot
-> demonstrate is a pipeline optimisation you should not keep.
+> This does not make Task B pointless. It makes it measurable. Do the task,
+> measure again, and be willing to conclude that one cache earns its keep and
+> the other does not.
 
 **Then read the finished numbers honestly.** The optimised pipeline is *more*
 expensive than the baseline in every column, and that is the correct result.
 Lab 01 ran two jobs on one Python version. Lab 02 runs six jobs on three,
-because a version matrix is information you did not previously have — and
-information costs runner-minutes. Comparing 64s against 21s is comparing a
+because a version matrix is information you did not have before, and
+information costs runner-minutes. Comparing 64s against 21s compares a
 pipeline that tests more against one that tested less.
 
 The comparison that actually measures this lab's work is the **last two rows**:
@@ -241,9 +240,9 @@ skips five of them on a single-service change.
 
 Two things that did *not* improve, and it is worth knowing why:
 
-- **Wall-clock stayed flat at 34s.** The skipped job was never on the critical
-  path, so removing it saved money and no time at all. Path filtering buys
-  runner-minutes, not latency. If you want latency, look at `needs:` edges.
+- **Wall-clock stayed flat at 34s.** The skipped job was not on the critical
+  path, so removing it saved money and no time. Path filtering buys
+  runner-minutes, not latency. For latency, look at `needs:` edges.
 - **The cold-cache columns are blank** for the optimised pipeline, because after
   Task C there is no single cold number to record — three Python versions mean
   three independent uv caches, and they warm at different times.

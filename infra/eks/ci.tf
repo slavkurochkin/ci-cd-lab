@@ -18,7 +18,7 @@ resource "aws_iam_openid_connect_provider" "github" {
   client_id_list = ["sts.amazonaws.com"]
 
   # AWS stopped verifying this thumbprint for the GitHub issuer, but the API
-  # still requires the field. It is vestigial, not load-bearing -- do not build
+  # still requires the field. It is left over and checks nothing -- do not build
   # a rotation runbook around it.
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }

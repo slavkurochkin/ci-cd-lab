@@ -72,6 +72,36 @@ section, pointing at official docs.
 before they get written. The 10 GB cap is a cache limit, not an artifact limit;
 that distinction is the kind of thing this curriculum exists to get right.
 
+## Plain language
+
+The prose here has a recurring failure: reaching for a clever phrase when a
+plain one is shorter and clearer. Six rules, all of them cuts.
+
+**No aphorism at the end of a paragraph.** Stop when the point is made. If a
+sentence exists to sound quotable, delete it.
+
+**One em-dash per paragraph, at most.** An em-dash aside is usually a thought
+that should be its own sentence or should not be there.
+
+**Use the literal statement unless the metaphor is shorter.** "Nobody looks at
+the other two" beats "the other two finish into an empty room."
+
+**Prefer the common word.** `use` not `utilize`. `but` not `however`.
+`important` not `load-bearing`. `left over` not `vestigial`. If the word was
+chosen because it sounds precise, it is the wrong word.
+
+**Cut the intensifiers**: `genuinely`, `actually`, `precisely`, `deliberately`,
+`simply`, `entirely`, `exactly` — unless removing the word changes the meaning.
+
+**Verbs over abstract nouns.** "throws the cache away" not "cache
+invalidation." "The two mistakes cost different amounts" not "getting the
+direction wrong is not symmetrical."
+
+The test is whether you would say the sentence out loud to a colleague. Keep
+concrete detail that does work — "a race that passes on a fast runner and fails
+on a slow one" earns its length because it describes the symptom. Cut detail
+that only decorates.
+
 ## Verification
 
 Run these before claiming anything works:
