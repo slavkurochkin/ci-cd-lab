@@ -206,11 +206,12 @@ Fill this in now and again at the end:
 
 | | Baseline (Lab 01) | Optimized (Lab 02) |
 |---|---|---|
-| Wall-clock, cold cache | 16s | |
-| Wall-clock, warm cache | 14–17s (n=4) | |
-| Total job-seconds, cold | 20s — api 9s, worker 11s | |
-| Total job-seconds, warm | 21–23s (n=4) | |
-| Jobs run for an api-only change | 2 of 2, always | |
+| Wall-clock, cold cache | 16s | — |
+| Wall-clock, warm cache | 14–17s (n=4) | 34s |
+| Total job-seconds, cold | 20s — api 9s, worker 11s | — |
+| Total job-seconds, warm | 21–23s (n=4) | 64s (6 jobs) |
+| Job-seconds for an api-only change | 21–23s (2 jobs) | 50s (5 jobs, 1 skipped) |
+| Jobs run for an api-only change | 2 of 2, always | 5 of 6 |
 
 Without the first column, "it feels faster" is all you will have.
 
@@ -225,6 +226,31 @@ Without the first column, "it feels faster" is all you will have.
 > measure again, and be willing to conclude that one of the two caches earns
 > its keep and the other does not. A pipeline optimisation you cannot
 > demonstrate is a pipeline optimisation you should not keep.
+
+**Then read the finished numbers honestly.** The optimised pipeline is *more*
+expensive than the baseline in every column, and that is the correct result.
+Lab 01 ran two jobs on one Python version. Lab 02 runs six jobs on three,
+because a version matrix is information you did not previously have — and
+information costs runner-minutes. Comparing 64s against 21s is comparing a
+pipeline that tests more against one that tested less.
+
+The comparison that actually measures this lab's work is the **last two rows**:
+the same change, filtered versus unfiltered. 6 jobs to 5, 64 job-seconds to 50,
+and that gap widens with every service you add — a repository with six services
+skips five of them on a single-service change.
+
+Two things that did *not* improve, and it is worth knowing why:
+
+- **Wall-clock stayed flat at 34s.** The skipped job was never on the critical
+  path, so removing it saved money and no time at all. Path filtering buys
+  runner-minutes, not latency. If you want latency, look at `needs:` edges.
+- **The cold-cache columns are blank** for the optimised pipeline, because after
+  Task C there is no single cold number to record — three Python versions mean
+  three independent uv caches, and they warm at different times.
+
+The honest summary of Lab 02 is not "the pipeline got faster." It is: **the
+pipeline got more thorough, and the marginal cost of each additional change was
+cut by only paying for what that change touched.**
 
 ---
 
