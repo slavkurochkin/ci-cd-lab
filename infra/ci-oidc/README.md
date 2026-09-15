@@ -46,6 +46,34 @@ Omit it and any repository on GitHub can assume this role. Widen it to
 `repo:owner/*` and so can every repository you own, including one you fork
 years from now.
 
+### The sub claim has two spellings
+
+GitHub is moving from `repo:owner/name:context` to an **immutable** form with
+numeric IDs embedded:
+
+```
+repo:slavkurochkin@67211311/ci-cd-lab@1367903510:pull_request
+```
+
+The IDs survive a rename or an ownership transfer. A policy pinned to names
+alone can be defeated by renaming a repository out from under it, which is why
+the format changed.
+
+The trust policy lists both, and a `StringLike` list matches if any entry does.
+**This is the failure mode to remember:** a policy with only the old spelling
+passes `terraform validate`, plans correctly, and is rejected only when a real
+token arrives. The error is `Not authorized to perform
+sts:AssumeRoleWithWebIdentity`, which names no cause. The actual claim is in
+CloudTrail under `userIdentity.principalId`:
+
+```bash
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
+  --max-results 1
+```
+
+### Branch scope
+
 The trailing `:*` allows any branch, tag and pull request. That is fine while
 the role grants nothing, and you want it working from feature branches
 throughout Track B. **Narrow it to `:ref:refs/heads/main` before attaching any

@@ -2,7 +2,12 @@
 #
 #   cp terraform.tfvars.example terraform.tfvars
 
-github_repo = "your-github-username/ci-cd-lab"
+github_repo     = "your-github-username/ci-cd-lab"
+
+# Numeric IDs, because GitHub embeds them in the sub claim. Find yours with:
+#   gh api repos/OWNER/NAME --jq "\"repo \(.id), owner \(.owner.id)\""
+github_owner_id = "0"
+github_repo_id  = "0"
 
 # Optional -- these are the defaults.
 # region    = "us-east-1"
