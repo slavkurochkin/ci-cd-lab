@@ -25,3 +25,25 @@ variable "role_name" {
   type        = string
   default     = "ci-cd-lab-ci"
 }
+
+# GitHub now issues an "immutable" sub claim that embeds numeric IDs:
+#
+#   repo:owner@<owner_id>/name@<repo_id>:pull_request
+#
+# rather than the older repo:owner/name:pull_request. The IDs survive a rename
+# or an ownership transfer, which is the whole point -- a trust policy pinned to
+# names alone can be defeated by renaming a repository out from under it.
+#
+# Find yours with:
+#
+#   gh api repos/OWNER/NAME --jq '"repo \(.id), owner \(.owner.id)"'
+#
+variable "github_owner_id" {
+  description = "Numeric GitHub account ID of the repository owner."
+  type        = string
+}
+
+variable "github_repo_id" {
+  description = "Numeric GitHub repository ID."
+  type        = string
+}

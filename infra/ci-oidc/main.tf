@@ -21,6 +21,11 @@ resource "aws_iam_openid_connect_provider" "github" {
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
 
+locals {
+  owner = split("/", var.github_repo)[0]
+  name  = split("/", var.github_repo)[1]
+}
+
 resource "aws_iam_role" "ci" {
   name        = var.role_name
   description = "Assumed by GitHub Actions in ${var.github_repo} via OIDC. No access key exists."
@@ -46,8 +51,16 @@ resource "aws_iam_role" "ci" {
         # want this working from feature branches throughout Track B. Narrow it
         # to `:ref:refs/heads/main` before attaching any policy that can change
         # infrastructure.
+        #
+        # Both spellings are listed because GitHub is moving from the first to
+        # the second, and a StringLike list matches if ANY entry matches. The
+        # immutable form is the one actually presented today -- see the
+        # github_owner_id / github_repo_id variables for why it exists.
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:${var.github_repo}:*",
+            "repo:${local.owner}@${var.github_owner_id}/${local.name}@${var.github_repo_id}:*",
+          ]
         }
       }
     }]
