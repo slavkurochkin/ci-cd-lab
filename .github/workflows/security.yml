@@ -1,0 +1,57 @@
+# Static analysis of the workflows themselves.
+#
+# The pipeline checks the application on every change. This checks the
+# pipeline, which is the part that holds the credentials.
+#
+# It also enforces the SHA pinning: zizmor's `unpinned-uses` rule is an error,
+# so replacing a pinned commit with a moveable tag fails here. That is why
+# there is no separate pin-checking script.
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # Actions get published, tags get moved, and new audits get added. A clean
+  # scan in March says nothing about April.
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Run zizmor
+        # Installed from PyPI at a pinned version rather than through the
+        # zizmor GitHub Action. Adding a third-party action in order to audit
+        # third-party actions is one more supplier to trust for no benefit.
+        #
+        # --format=github turns findings into inline annotations on the diff.
+        # --offline skips the network calls that resolve action metadata, which
+        # this repository does not need and which fail closed on a rate limit.
+        run: |
+          uvx zizmor@1.30.1 \
+            --offline \
+            --format=github \
+            --config .github/zizmor.yml \
+            .github/
