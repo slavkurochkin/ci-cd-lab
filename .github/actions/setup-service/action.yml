@@ -30,7 +30,7 @@ runs:
       # the `service` input, and pass `version` through as the Python version
       # with a sensible fallback when it is empty.
       if: inputs.service == 'api'
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
       with:
         python-version: ${{ inputs.version || '3.12' }}
         enable-cache: true
@@ -41,7 +41,7 @@ runs:
     # app/worker/package-lock.json and the node version taken from `version`.
     - name: Install node
       if: inputs.service == 'worker'
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
         node-version: ${{ inputs.version || '22' }} 
         cache: npm
@@ -56,6 +56,6 @@ runs:
       # expose a `make install` target, so one step covers both. Making the
       # services uniform is what removed the duplication here -- not making the
       # YAML cleverer.
-      working-directory: app/${{ inputs.service }}
+      working-directory: app/${{ inputs.service }}  
       run: make install
       shell: bash
