@@ -19,11 +19,30 @@ name: Reusable service CI
 # reads the `test` job's output of the same name. A reusable workflow that
 # returns nothing is a script; one with outputs is an interface.
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      service:
+        description: The service to test -- also the directory name under app/.
+        required: true
+        type: string
+      versions:
+        description: JSON array of runtime versions, as a string. Inputs cannot be lists.
+        required: false
+        type: string
+        default: '["default"]'
+      run-integration-tests:
+        description: Whether to run the integration suite against a real dependency.
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      coverage-artifact:
+        description: Name of the artifact holding this service's coverage report.
+        value: ${{ jobs.test.outputs.coverage-artifact }}
 
 jobs:
   test:
-    name: ${{ inputs.service }}
+    name: ${{ inputs.service }} (${{ matrix.version }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -33,6 +52,11 @@ jobs:
     # strings, booleans or numbers. The caller therefore passes a JSON array as
     # a string, and you unpack it here with fromJSON(). Set fail-fast to false,
     # and put the matrix value in the job `name:` so the legs are told apart.
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJSON(inputs.versions) }}
+
 
     # TODO(lab-03-b): Declare a job output named `coverage-artifact` with the
     # value `coverage-<service>`.
@@ -40,6 +64,8 @@ jobs:
     # Note *why* that value is safe: it does not depend on the matrix. A job
     # output that varied per matrix leg would be written by every leg and the
     # last writer wins, with no defined ordering.
+    outputs:
+      coverage-artifact: coverage-${{ inputs.service }}
 
     steps:
       - name: Check out the repository
@@ -49,7 +75,9 @@ jobs:
         # TODO(lab-03-a2): Call your composite action. A local action is
         # referenced by path from the repository root, and the repository must
         # already be checked out -- which is why this step comes second.
-        run: echo 'replace this step with a call to ./.github/actions/setup-service'
+        uses: ./.github/actions/setup-service
+        with:
+          service: ${{ inputs.service }}
 
       - name: Lint and format check
         working-directory: app/${{ inputs.service }}
@@ -77,3 +105,51 @@ jobs:
   # inside the container. When an image cannot describe its own readiness,
   # waiting for it becomes your job -- and a job that starts testing before the
   # dependency is up fails intermittently, which is the worst kind of failure.
+  integration:
+    # Distinct from the test job's name. Both jobs would otherwise report as
+    # the service name and be indistinguishable in the checks list.
+    name: ${{ inputs.service }} integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: inputs.run-integration-tests
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:2.5.2
+        ports:
+          - 8000:8000
+        # No `options: --health-cmd` here on purpose. The health command runs
+        # *inside* the service container, and this image is a JRE plus a jar --
+        # no curl, no wget, no shell health tool. There is nothing to run, so
+        # the readiness wait below is the job's problem instead.
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up ${{ inputs.service }}
+        uses: ./.github/actions/setup-service
+        with:
+          service: ${{ inputs.service }}
+
+      - name: Wait for DynamoDB
+        # DynamoDB Local answers 400 to an unsigned GET, which is proof it is
+        # listening. `curl -f` treats 400 as failure, so check that the request
+        # completed at all rather than that it succeeded.
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost:8000; then
+              echo "dynamodb-local is up after ${attempt}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::dynamodb-local did not answer on :8000 within 30s"
+          exit 1
+
+      - name: Run integration tests
+        working-directory: app/${{ inputs.service }}
+        env:
+          DYNAMODB_ENDPOINT: http://localhost:8000
+          AWS_REGION: us-east-1
+        run: make test-integration

@@ -14,6 +14,13 @@ description: Install the toolchain and dependencies for one service in this repo
 # Inputs on a composite action have no `type:` -- they are always strings.
 # That is why the reusable workflow in TODO(lab-03-c) has to pass its matrix
 # as JSON.
+inputs:
+  service:
+    description: The service to setup
+    required: true
+  version:
+    description: The runtime version
+    required: false
 
 runs:
   using: composite
@@ -22,14 +29,23 @@ runs:
       # TODO(lab-03-a2): This step must only run for the api service. Gate it on
       # the `service` input, and pass `version` through as the Python version
       # with a sensible fallback when it is empty.
+      if: inputs.service == 'api'
       uses: astral-sh/setup-uv@v5
       with:
+        python-version: ${{ inputs.version || '3.12' }}
         enable-cache: true
         cache-dependency-glob: app/api/uv.lock
 
     # TODO(lab-03-a2): Add the matching step for the worker: actions/setup-node,
     # gated on the `service` input, with npm caching pointed at
     # app/worker/package-lock.json and the node version taken from `version`.
+    - name: Install node
+      if: inputs.service == 'worker'
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.version || '22' }} 
+        cache: npm
+        cache-dependency-path: app/worker/package-lock.json
 
     - name: Install dependencies
       # TODO(lab-03-a3): This step fails with "Required property is missing:
@@ -42,3 +58,4 @@ runs:
       # YAML cleverer.
       working-directory: app/${{ inputs.service }}
       run: make install
+      shell: bash

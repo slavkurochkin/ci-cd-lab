@@ -47,9 +47,15 @@ jobs:
           #       - *shared
           #       - 'app/api/**'
           filters: |
+            shared: &shared
+              - '.github/workflows/lab-03-ci.yml'
+              - '.github/workflows/reusable-service-ci.yml'
+              - '.github/actions/setup-service/action.yml'
             api:
+              - *shared
               - 'app/api/**'
             worker:
+              - *shared
               - 'app/worker/**'
 
   # TODO(lab-03-d1): Add the `api` and `worker` jobs. Each one calls the
@@ -70,6 +76,22 @@ jobs:
   # not also declare `steps`, `runs-on` or `timeout-minutes`. The called
   # workflow owns all of that. If you copy those lines across from Lab 02 the
   # workflow will not parse.
+  api:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.api == 'true'
+    uses: ./.github/workflows/reusable-service-ci.yml
+    with:
+      service: api
+      versions: '["3.11", "3.12", "3.13"]'
+      run-integration-tests: true
+
+  worker:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.worker == 'true'
+    uses: ./.github/workflows/reusable-service-ci.yml
+    with:
+      service: worker
+      versions: '["20", "22"]'
 
   ci-passed:
     name: ci-passed
@@ -86,8 +108,11 @@ jobs:
           # the interface actually returns something. The outputs of a job that
           # called a reusable workflow are read exactly like any other job's:
           # needs.<job>.outputs.<name>
+          API_COVERAGE: ${{ needs.api.outputs.coverage-artifact }}
+          WORKER_COVERAGE: ${{ needs.worker.outputs.coverage-artifact }}
         run: |
           echo "api=$API_RESULT worker=$WORKER_RESULT"
+          echo "coverage artifacts: $API_COVERAGE $WORKER_COVERAGE"
           for result in "$API_RESULT" "$WORKER_RESULT"; do
             case "$result" in
               success|skipped) ;;

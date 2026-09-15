@@ -24,3 +24,18 @@
 # `github` context, the real Actions cache backend, and GitHub-hosted service
 # container networking are all approximated or absent. act catches wiring
 # mistakes. Only a real run proves a workflow works.
+
+# act's default runner image is a near-empty stub. This one ships the tools a
+# GitHub runner has, so `make install` and the setup actions have something to
+# work with.
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# The runner images are built for amd64. On Apple Silicon, Docker would
+# otherwise pick an arm64 image that does not exist, or run one that behaves
+# differently from CI. Emulated and slow beats fast and unrepresentative.
+--container-architecture linux/amd64
+
+# actions/upload-artifact needs somewhere to write. Without this the step
+# fails outright rather than being skipped, so a job that uploads coverage
+# cannot be run locally at all.
+--artifact-server-path /tmp/act-artifacts
