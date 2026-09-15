@@ -1,0 +1,20 @@
+# Pinning actions to a SHA stops a tag being moved under you. It also stops
+# you receiving fixes, so a pin without an update mechanism is a slow leak of
+# a different kind. Dependabot rewrites the SHA and the trailing version
+# comment together, as a pull request the pipeline checks like any other.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      # One pull request for all of them. Five separate SHA bumps a week is
+      # how people learn to merge these without reading them.
+      actions:
+        patterns:
+          - "*"

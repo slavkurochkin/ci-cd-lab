@@ -18,6 +18,12 @@ on:
   push:
     branches: [main]
 
+# Least privilege for the whole workflow. The repository default is already
+# `read`, but a default is a setting someone can change; this is a declaration
+# that travels with the file. Nothing here writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   api:
     name: api
@@ -29,10 +35,15 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # checkout leaves GITHUB_TOKEN in .git/config. Anything that later
+          # uploads the working directory as an artifact would ship the token
+          # with it. Nothing here pushes back to git, so nothing needs it.
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: Install dependencies
         working-directory: app/api
@@ -72,10 +83,15 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # checkout leaves GITHUB_TOKEN in .git/config. Anything that later
+          # uploads the working directory as an artifact would ship the token
+          # with it. Nothing here pushes back to git, so nothing needs it.
+          persist-credentials: false
 
       - name: Install Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: 'npm'
