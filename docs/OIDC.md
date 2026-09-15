@@ -153,10 +153,59 @@ Everything else is plumbing. This one line decides who gets in.
 Omitting it is not a small mistake. It means a stranger's workflow can assume
 your role.
 
-The trailing `:*` allows any branch and any pull request. That is reasonable
-while the role grants nothing, and while you want it working from feature
-branches. **Narrow it to a single branch before the role can change anything
-that matters** — otherwise anyone who can open a pull request can run as it.
+### `:*` includes `:pull_request`, and that is further than it looks
+
+This is the part people get wrong, and it is worth slowing down for.
+
+When a workflow runs on a pull request, the `sub` claim is:
+
+```
+repo:OWNER/NAME:pull_request
+```
+
+**It names the repository the pull request is opened against — not whoever
+wrote the code.** There is no branch in it, no author, and nothing identifying
+which pull request it was.
+
+So a condition ending in `:*`, or in `:pull_request`, is satisfied by **anyone
+who can open a pull request against your repository.** Adding a collaborator
+therefore hands them the role, without anyone deciding to. They push a branch,
+open a pull request, and their workflow runs with a `sub` your policy accepts.
+
+This is not theoretical. [A demonstration against Azure][binsec] shows
+credentials pinned to `pull_request` being used exactly this way, and concludes
+that such credentials are *"accessible to anyone with collaborator access to the
+matching repository."* The same reasoning applies to AWS.
+
+**Forks are a separate question, and GitHub's documentation does not answer
+it.** The OIDC reference describes the `id-token: write` permission and the
+`sub` formats but says nothing about whether a pull request from a fork can
+obtain a token. Treat that silence as a reason to pin the subject rather than a
+reason to relax — a control you cannot find documented is not a control you
+should depend on.
+
+### The rule
+
+> **A role that grants nothing may use `:*`. A role that can change anything is
+> pinned to a branch or an environment.**
+
+A role with no policies attached is safe with a wide subject, because assuming
+it achieves nothing. That is how the role in this repository is configured: it
+exists to prove the login works.
+
+The moment a role gains real permissions, narrow it:
+
+| Condition | Who gets in | Use for |
+|---|---|---|
+| `repo:OWNER/NAME:*` | anyone who can open a pull request | roles that grant nothing |
+| `repo:OWNER/NAME:ref:refs/heads/main` | only runs on `main` | deploys, infrastructure |
+| `repo:OWNER/NAME:environment:production` | only jobs targeting that environment | anything you want a gate on |
+
+The last one pairs with a GitHub **environment** carrying required reviewers.
+The subject then encodes "a human approved this," and the credential cannot be
+obtained any other way. That is what makes an environment more than paperwork.
+
+[binsec]: https://www.binarysecurity.no/posts/2025/09/securing-gh-actions-part2
 
 ---
 
@@ -225,6 +274,23 @@ Common causes, roughly by frequency:
 | `Not authorized`, works on `main` only | your condition pins a branch |
 | `Not authorized` from a fork | correct: forks get a different `sub` |
 | `InvalidIdentityToken` | `aud` mismatch between workflow and policy |
+
+---
+
+## Where this repository stands
+
+The role here has **no policies attached at all**, so its wide subject grants
+nothing:
+
+```bash
+aws iam list-attached-role-policies --role-name <role>   # []
+aws iam list-role-policies --role-name <role>            # []
+```
+
+That is deliberate and it is the only reason `:*` is acceptable here. The first
+role that gains real permissions — the Terraform role in Project 6 — gets
+pinned to `main`, and anything that deploys gets an environment with a reviewer
+on top.
 
 ---
 
