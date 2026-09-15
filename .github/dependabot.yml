@@ -13,6 +13,16 @@ updates:
     commit-message:
       prefix: "ci"
 
+    # Wait a week before proposing a newly published version.
+    #
+    # Automated updates and a compromised maintainer account are the same
+    # mechanism seen from two sides: a new version appears and something opens
+    # a pull request for it. The cooldown is the gap in which someone else
+    # notices and the release gets yanked. Dependabot's own default is three
+    # days; seven is what zizmor asks for.
+    cooldown:
+      default-days: 7
+
     groups:
       # Patch and minor updates are bundled. They are the weekly noise, they
       # carry no promised breakage, and five separate pull requests a week is
