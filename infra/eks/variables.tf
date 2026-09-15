@@ -49,3 +49,13 @@ variable "table_name" {
   type        = string
   default     = "lab-orders"
 }
+
+variable "ci_role_name" {
+  description = <<-DESC
+    Name of the CI role created by infra/ci-oidc. This stack looks it up and
+    attaches cluster-scoped permissions to it; it does not create it. Apply
+    infra/ci-oidc first or the data lookup fails.
+  DESC
+  type        = string
+  default     = "ci-cd-lab-ci"
+}

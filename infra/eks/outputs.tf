@@ -9,8 +9,8 @@ output "cluster_endpoint" {
 }
 
 output "ci_deploy_role_arn" {
-  description = "Set this as the `role-to-assume` in the deploy workflow. It is an ARN, not a credential -- it is safe in plain sight in the workflow file, which is the entire point of OIDC."
-  value       = aws_iam_role.ci_deploy.arn
+  description = "Set this as the `role-to-assume` in the deploy workflow. It is an ARN, not a credential -- it is safe in plain sight in the workflow file, which is the entire point of OIDC. Created by infra/ci-oidc; this stack only grants it cluster access."
+  value       = data.aws_iam_role.ci.arn
 }
 
 output "api_service_account" {
