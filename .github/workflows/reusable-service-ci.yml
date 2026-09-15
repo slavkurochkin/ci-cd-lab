@@ -106,7 +106,9 @@ jobs:
   # waiting for it becomes your job -- and a job that starts testing before the
   # dependency is up fails intermittently, which is the worst kind of failure.
   integration:
-    name: ${{ inputs.service }}
+    # Distinct from the test job's name. Both jobs would otherwise report as
+    # the service name and be indistinguishable in the checks list.
+    name: ${{ inputs.service }} integration
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: inputs.run-integration-tests
