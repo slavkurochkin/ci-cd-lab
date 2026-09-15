@@ -31,7 +31,7 @@ jobs:
       worker: ${{ steps.filter.outputs.worker }}
     steps:
       - name: Check out the repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # checkout leaves GITHUB_TOKEN in .git/config. Anything that later
           # uploads the working directory as an artifact would ship the token
@@ -40,7 +40,7 @@ jobs:
 
       - name: Detect which services changed
         id: filter
-        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           # TODO(lab-03-d2): Three files now affect both services: this file,
           # the reusable workflow, and the composite action. A change to any of
