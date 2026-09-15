@@ -1,11 +1,12 @@
 # What we built, and why it matters
 
-A plain-language record of Labs 01–03. Written to be read start to finish, not
-skimmed for commands.
+A plain-language record of Labs 01–03 and the security work in Project 4.
+Written to be read start to finish, not skimmed for commands.
 
 **Repository:** https://github.com/slavkurochkin/ci-cd-lab
-**Status:** Track A complete. Labs 01, 02 and 03 all passing.
-**Cost so far:** $0. Nothing has ever run in AWS.
+**Status:** Track A complete. Labs 01, 02 and 03 all passing. Project 4
+(security) mostly done.
+**Cost so far:** $0. The only AWS resources that exist are free ones.
 
 ---
 
@@ -191,6 +192,137 @@ the sort of small detail that causes them.
 
 ---
 
+## Project 4 — Take the keys out of the pipeline
+
+Everything so far was about correctness. This part is about what a pipeline is
+allowed to do, and what happens if someone gets into it.
+
+We ran a security scanner called `zizmor` over the workflows. It found **47
+problems**. Four kinds:
+
+### 1. The pipeline had more power than it needed
+
+Every job was running with whatever permissions the repository default gave it.
+The default happened to be safe, but a default is a setting someone can change
+later, and then nine jobs quietly gain powers nobody reviewed.
+
+Each workflow now states what it needs, in the file itself:
+
+```yaml
+permissions:
+  contents: read
+```
+
+### 2. Checking out the code left a password lying around
+
+When a job downloads your code, the tool it uses saves an access token into a
+hidden file in that folder. It stays there for the rest of the job. If any
+later step packages up that folder and uploads it, the token goes with it — and
+uploaded files can be downloaded by anyone who can see the run.
+
+Nothing here pushes code back, so nothing needs that token. Eight checkout
+steps now say `persist-credentials: false`.
+
+### 3. We were trusting labels instead of code
+
+The pipeline used tools written by other people, referred to by a label like
+`v4`. A label is a pointer, and the person who owns the tool can move it
+whenever they like. If their account were compromised, `v4` could be pointed at
+malicious code and your next run would execute it.
+
+All 17 references now name an **exact commit** instead of a label. A commit
+cannot be changed after the fact. We also added **Dependabot**, which proposes
+updates weekly — because pinning to an exact version and never updating is its
+own kind of problem.
+
+### 4. Two things we were already doing right
+
+The scanner checks for two attacks that actually get repositories compromised:
+running untrusted code from forks, and pasting text from a pull request title
+straight into a shell command. Neither was present.
+
+**Result: 47 problems down to 6, with zero of high or medium severity.** The
+six remaining are style preferences, not risks.
+
+---
+
+## The bigger piece: no passwords at all
+
+The normal way for a pipeline to reach a cloud account is to paste an access
+key into the repository's secret storage. That key does not expire. It works
+from anywhere. If it ever leaks, you find out later.
+
+**We set it up so no key exists.**
+
+The mechanism is called OIDC, and it works like a passport check:
+
+1. The pipeline asks GitHub for a signed statement about itself: *"this is a
+   run in the repository slavkurochkin/ci-cd-lab."*
+2. It hands that statement to AWS.
+3. AWS checks the signature, confirms the statement names a repository it
+   trusts, and hands back credentials valid for **one hour**.
+
+There is no key to store, no key to rotate, and no key to leak. `gh secret
+list` on this repository is empty and stays empty.
+
+We proved it with a workflow that asks AWS "who am I?" and checks the answer:
+
+```
+arn:aws:sts::653070064096:assumed-role/ci-cd-lab-ci/GitHubActions
+OK: short-lived session, no stored key
+```
+
+### Why it lives in its own folder
+
+The trust setup was originally written inside the Kubernetes cluster's
+configuration. That was wrong for two reasons:
+
+- An AWS account can hold **only one** of these trust registrations. Any second
+  thing needing it would fail.
+- The cluster is created and destroyed every session. The trust relationship
+  should last for years.
+
+Things with different lifespans belong in different places. It now lives in
+`infra/ci-oidc/`, costs **nothing**, and is meant to stay.
+
+### The role can do nothing
+
+The identity we created has **no permissions attached at all**. Asking "who am
+I?" requires no permission, so this proves the login works while granting
+access to nothing. Permissions get added later, when there is something to
+manage. A credential that can do nothing is a safe thing to leave switched on.
+
+### The bug that only a real run could find
+
+The first attempt failed. The error said:
+
+```
+Not authorized to perform sts:AssumeRoleWithWebIdentity
+```
+
+That message names no cause. The configuration looked correct, Terraform
+validated it, and the plan read exactly as intended.
+
+The answer was in AWS's audit log. GitHub's signed statement says:
+
+```
+repo:slavkurochkin@67211311/ci-cd-lab@1367903510:pull_request
+```
+
+Those numbers are GitHub's internal IDs for the account and the repository. Our
+rule expected the older format without them, so the two never matched.
+
+GitHub added the numbers on purpose: names can be changed, IDs cannot. If
+someone renamed a repository, a rule based on names could be pointed at the
+wrong thing. The rule now accepts both spellings.
+
+**The lesson is the same one from Lab 01.** Everything that could be checked
+without running it passed. Only a real attempt found the problem. Every
+published example of this setup still shows the old format, including the copy
+that was already sitting in this repository.
+
+---
+
 ## What you have now
 
 | | |
@@ -200,10 +332,12 @@ the sort of small detail that causes them.
 | **Only what changed gets built** | proven by a pull request where one job skipped and the merge stayed open |
 | **The build is written once** | adding a service means a Makefile, not a pipeline edit |
 | **Tests run against a real database** | catching a class of bug a fake would hide |
-| **Nothing costs money yet** | 0 AWS resources, $0 spent |
+| **The pipeline holds no passwords** | AWS access with nothing stored, proven by a real run |
+| **Tools are pinned to exact versions** | a supplier cannot change what runs under you |
+| **Nothing costs money yet** | the only AWS resources that exist are free |
 
-Five pull requests, sixteen commits, three saved checkpoints you can return to
-(`lab-01-solved`, `lab-02-solved`, `lab-03-solved`).
+Eight pull requests, ten commits on `main`, three saved checkpoints you can
+return to (`lab-01-solved`, `lab-02-solved`, `lab-03-solved`).
 
 ---
 
@@ -224,12 +358,35 @@ complexity is compensation for services that behave differently from each
 other. Give them the same four commands and the clever pipeline code becomes
 unnecessary.
 
+**4. The credential you never created cannot leak.** Most pipelines hold a
+permanent key because that is the obvious way to do it. Swapping it for a
+one-hour credential issued on demand removes the whole category of "someone
+found our key" — not by being careful with it, but by not having one.
+
+**5. Passing every check you can run offline proves nothing about the parts
+you cannot.** The trust rule was valid, correct-looking, matched every
+published example, and was rejected the first time a real request arrived. The
+same thing happened in Lab 01 with a workflow that parsed perfectly and had
+never run.
+
 ---
 
 ## What comes next
 
-Track B, Projects 6–9: infrastructure as code with Terraform, and the first
-point where AWS starts billing.
+Three small things are still open from the security work:
+
+- the security scanner runs on your laptop, not in the pipeline
+- nothing stops someone replacing an exact version with a label again
+- there is no "a human must approve this" gate for deployments
+
+And one decision waiting: Dependabot's first proposal bundles **fifteen major
+version jumps** across five tools into a single pull request. The tests pass,
+and most of those jumps are a runtime change that affects nothing here. But
+grouping majors was a mistake in how it was configured — if the tests had
+failed, you would be untangling five tools at once.
+
+Then Track B, Projects 6–9: infrastructure as code with Terraform, and the
+first point where AWS starts billing.
 
 Two rules from `docs/COST.md` that begin to matter there:
 
