@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and set github_repo. That file is gitignored.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+github_repo = "your-github-username/ci-cd-lab"
+
+# Optional -- these are the defaults.
+# region    = "us-east-1"
+# role_name = "ci-cd-lab-ci"
