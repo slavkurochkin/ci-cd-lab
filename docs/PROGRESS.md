@@ -4,8 +4,8 @@ A plain-language record of Labs 01–03 and the security work in Project 4.
 Written to be read start to finish, not skimmed for commands.
 
 **Repository:** https://github.com/slavkurochkin/ci-cd-lab
-**Status:** Track A complete. Labs 01, 02 and 03 all passing. Project 4
-(security) mostly done.
+**Status:** Labs 01, 02 and 03 passing. Project 4 complete.
+**Next:** Project 5, then Capstone A. See the Progress table in `ROADMAP.md`.
 **Cost so far:** $0. The only AWS resources that exist are free ones.
 
 ---
@@ -326,6 +326,42 @@ that was already sitting in this repository.
 
 ---
 
+## Finishing Project 4
+
+The three items left over were all closed:
+
+**The scanner now runs in the pipeline**, on every pull request and once a
+week. The weekly run matters: tools get published and labels get moved, so a
+clean scan today says nothing about next month.
+
+**It also enforces the exact-version rule.** The scanner treats a label where a
+commit should be as an error, so there was no need for a separate check. This
+was verified by putting a label back and watching the job fail.
+
+**A deployment gate exists.** A job can now declare that it targets
+`production`, and it will not start until a person approves it. We ran one and
+watched it sit waiting.
+
+That gate turned out to be more than a button. When a job runs under it, the
+statement GitHub signs about that job changes:
+
+```
+repo:OWNER@<id>/NAME@<id>:environment:production
+```
+
+An AWS identity can require exactly that. Which means the credential cannot be
+obtained by opening a pull request, or by pushing to a branch — **only by a job
+a human approved.** That is the piece Project 6 needs, and it now exists.
+
+One more thing worth recording: the update tool's first proposal bundled
+**fifteen major version jumps across five tools** into one pull request. The
+tests passed, but had they failed, the cause could have been any of the five.
+The configuration was changed so that routine updates stay bundled and major
+ones arrive separately. The very next batch also demonstrated the new one-week
+waiting period, holding back a release published two days earlier.
+
+---
+
 ## What you have now
 
 | | |
@@ -337,10 +373,13 @@ that was already sitting in this repository.
 | **Tests run against a real database** | catching a class of bug a fake would hide |
 | **The pipeline holds no passwords** | AWS access with nothing stored, proven by a real run |
 | **Tools are pinned to exact versions** | a supplier cannot change what runs under you |
+| **A human can gate a deployment** | proven by a job that waited for approval |
+| **The pipeline checks itself** | a workflow scanner runs on every change and weekly |
 | **Nothing costs money yet** | the only AWS resources that exist are free |
 
-Eight pull requests, ten commits on `main`, three saved checkpoints you can
-return to (`lab-01-solved`, `lab-02-solved`, `lab-03-solved`).
+Fifteen merged pull requests, twenty-five commits on `main`, three saved
+checkpoints you can return to (`lab-01-solved`, `lab-02-solved`,
+`lab-03-solved`).
 
 ---
 
@@ -376,20 +415,15 @@ never run.
 
 ## What comes next
 
-Three small things are still open from the security work:
+**Project 5 — Building & Publishing Containers**, then **Capstone A**.
 
-- the security scanner runs on your laptop, not in the pipeline
-- nothing stops someone replacing an exact version with a label again
-- there is no "a human must approve this" gate for deployments
+Projects 1 to 5 are one group, and the capstone assembles them into the single
+pipeline every later track builds on. It is tempting to jump straight to
+Terraform; that skips the part that produces the images everything later
+deploys.
 
-And one decision waiting: Dependabot's first proposal bundles **fifteen major
-version jumps** across five tools into a single pull request. The tests pass,
-and most of those jumps are a runtime change that affects nothing here. But
-grouping majors was a mistake in how it was configured — if the tests had
-failed, you would be untangling five tools at once.
-
-Then Track B, Projects 6–9: infrastructure as code with Terraform, and the
-first point where AWS starts billing.
+After that, Track B, Projects 6–9: infrastructure as code with Terraform, and
+the first point where AWS starts billing.
 
 Two rules from `docs/COST.md` that begin to matter there:
 

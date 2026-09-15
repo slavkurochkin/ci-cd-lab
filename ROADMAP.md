@@ -942,7 +942,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 1 | Pipelines & the Build Contract | [`labs/01_first_pipeline`](labs/01_first_pipeline) | Built |
 | 2 | Speed & Cost | [`labs/02_speed_and_cost`](labs/02_speed_and_cost) | Built |
 | 3 | Abstraction, Service Containers & the Local Loop | [`labs/03_abstraction`](labs/03_abstraction) | Built |
-| 4 | Trust: Permissions, OIDC & Supply Chain | — | Planned |
+| 4 | Trust: Permissions, OIDC & Supply Chain | no lab — worked from this file | **Done** |
 | 5 | Building & Publishing Containers | — | Planned |
 | A | Capstone — The Golden Pipeline | — | Planned |
 | 6 | Terraform Fundamentals | — | Planned |
@@ -960,3 +960,12 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 16 | Observability & Deployment Signals | — | Planned |
 | 17 | Supply Chain & Policy Enforcement | — | Planned |
 | 18 | Reliability, Cost & Scale | — | Planned |
+
+**Built** means a lab exists with a starter, a verifier and a README.
+**Done** means the project was worked directly from this file, with no graded
+lab. Project 4 was done that way; `docs/PROGRESS.md` records what was built and
+`docs/OIDC.md` explains the part that needed it.
+
+Projects 1–5 are the Automation domain, and **Capstone A** assembles them. Do
+not skip from 4 to Track B: Project 5 produces the container images, and the
+capstone is what every later track builds on.
