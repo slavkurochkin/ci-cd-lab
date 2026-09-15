@@ -1,0 +1,68 @@
+# Demonstrates the deployment gate, and what it does to the OIDC subject.
+#
+# Run it by hand: Actions -> Production gate -> Run workflow. The job will sit
+# in "Waiting" until a reviewer approves it, because the `production`
+# environment requires one.
+#
+# Nothing here deploys anything. It exists so the gate is a thing you have
+# watched work rather than a setting you turned on once.
+name: Production gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gated:
+    name: gated
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # This one line is the gate. The job does not start until a required
+    # reviewer approves it, and the environment only accepts protected
+    # branches.
+    environment: production
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Show what the subject claim becomes
+        # Requesting the token directly, rather than through
+        # configure-aws-credentials, so the claim itself is visible.
+        #
+        # Only the sub, aud and ref claims are printed. The token is a bearer
+        # credential for the next few minutes -- printing it would hand it to
+        # anyone who can read the log.
+        env:
+          AUDIENCE: sts.amazonaws.com
+        run: |
+          set -euo pipefail
+
+          token=$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')
+
+          JWT="$token" python3 -c '
+          import base64, json, os
+
+          payload = os.environ["JWT"].split(".")[1]
+          payload += "=" * (-len(payload) % 4)          # restore base64 padding
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+
+          for key in ("sub", "aud", "ref", "repository", "workflow"):
+              print(f"{key:12} {claims.get(key)}")
+          '
+
+      - name: What this means
+        run: |
+          echo "The sub claim now ends in :environment:production."
+          echo
+          echo "A role whose trust policy requires that subject can only be"
+          echo "assumed from a job that named this environment -- which means"
+          echo "only after a human approved it. Opening a pull request is not"
+          echo "enough, and neither is pushing to a branch."
