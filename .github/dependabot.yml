@@ -6,7 +6,14 @@ version: 2
 
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    # `/` covers .github/workflows and a root action.yml -- it does NOT cover a
+    # composite action under .github/actions/. That gap is invisible: the pins
+    # in the composite action simply never get proposed, and nothing reports it.
+    # Found because five merged update pull requests left the composite action
+    # three major versions behind the workflows calling it.
+    directories:
+      - /
+      - /.github/actions/setup-service
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
