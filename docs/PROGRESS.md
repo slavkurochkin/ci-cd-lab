@@ -265,10 +265,13 @@ The mechanism is called OIDC, and it works like a passport check:
 There is no key to store, no key to rotate, and no key to leak. `gh secret
 list` on this repository is empty and stays empty.
 
+`docs/OIDC.md` explains the mechanism properly, including the claims, the trust
+policy, and how to debug it when it refuses.
+
 We proved it with a workflow that asks AWS "who am I?" and checks the answer:
 
 ```
-arn:aws:sts::653070064096:assumed-role/ci-cd-lab-ci/GitHubActions
+arn:aws:sts::<account-id>:assumed-role/ci-cd-lab-ci/GitHubActions
 OK: short-lived session, no stored key
 ```
 
