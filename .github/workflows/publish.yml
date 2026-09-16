@@ -30,7 +30,11 @@ env:
 
 jobs:
   image:
-    name: ${{ matrix.service }}
+    # `image (api)`, not `api`. Branch protection matches required checks by
+    # name alone, and three lab workflows already report jobs called `api` and
+    # `worker` -- so a required `api` would be satisfied by whichever workflow
+    # reported last, which is not a gate.
+    name: image (${{ matrix.service }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -154,3 +158,25 @@ jobs:
           echo
           echo "Verify from anywhere:"
           echo "  gh attestation verify oci://${IMAGE}@${DIGEST} --repo ${REPO}"
+
+  images-passed:
+    name: images-passed
+    needs: [image]
+    # Runs even when a leg was skipped or failed, so there is always something
+    # for branch protection to read. `needs.image.result` is the matrix as a
+    # whole: it is `success` only when every leg succeeded.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check the image jobs
+        env:
+          RESULT: ${{ needs.image.result }}
+        run: |
+          set -euo pipefail
+          echo "image jobs: $RESULT"
+          case "$RESULT" in
+            success|skipped) ;;
+            *) echo "::error::an image job reported '$RESULT'"; exit 1 ;;
+          esac
