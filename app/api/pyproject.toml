@@ -7,6 +7,10 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "boto3>=1.35.0",
+    # DELIBERATELY VULNERABLE -- do not merge.
+    # certifi 2022.12.7 carries CVE-2023-37920 (HIGH), fixed in 2023.7.22.
+    # Added to prove the Trivy gate blocks a publish rather than reporting one.
+    "certifi==2022.12.7",
 ]
 
 [project.optional-dependencies]
