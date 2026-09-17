@@ -1,0 +1,45 @@
+# Lab 04 -- checking the pipeline itself (starter)
+#
+# The lab workflows check the application on every change. Nothing checks the
+# workflows, which are the part that holds the credentials.
+name: Security
+
+# TODO(lab-04-e1): Decide when this runs.
+#
+# Pull requests and pushes to main are obvious. A schedule is not, and it is
+# the one that matters: actions get published, tags get moved, and new audits
+# get added, so a clean scan today says nothing about next month.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # TODO(lab-04-e1): Check out the repository and run zizmor over
+      # `.github/`, failing the job on any finding.
+      #
+      # Install it from PyPI at a pinned version rather than using the zizmor
+      # GitHub Action. Adding a third-party action in order to audit
+      # third-party actions is one more supplier to trust for no benefit.
+      # `uvx zizmor@<version>` runs it without installing anything permanently.
+      #
+      # Two flags worth passing: `--format=github` turns findings into inline
+      # annotations on the diff, and `--config` points at the file you wrote in
+      # TODO(lab-04-e2).
+      #
+      # Note what this job also buys you: zizmor treats an unpinned action as
+      # an *error*, so this job is what enforces TODO(lab-04-c)'s SHA pin.
+      # There is no need for a separate pin-checking script.
+      - name: Replace me
+        run: echo 'check out the repository, then run zizmor'

@@ -1,0 +1,12 @@
+title: "Building & Publishing Containers"
+project: 5
+files:
+  - starter: starter/publish.yml
+    target: .github/workflows/publish.yml
+    solution: solution/publish.yml
+  - starter: starter/api.Dockerfile
+    target: app/api/Dockerfile
+    solution: solution/api.Dockerfile
+  - starter: starter/worker.Dockerfile
+    target: app/worker/Dockerfile
+    solution: solution/worker.Dockerfile
