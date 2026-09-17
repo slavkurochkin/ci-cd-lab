@@ -1,0 +1,61 @@
+# Project 4 -- proof that CI can reach AWS with no stored credential.
+#
+# Run it and then check `gh secret list`. It is empty. There is no access key
+# in this repository, no key to rotate, and no key that can leak -- the runner
+# asks GitHub for a short-lived token about itself, AWS verifies that token
+# against the OIDC provider, and hands back credentials valid for one hour.
+#
+# Requires infra/ci-oidc to be applied.
+name: AWS identity
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/aws-identity.yml'
+      - 'infra/ci-oidc/**'
+
+permissions:
+  contents: read
+
+jobs:
+  whoami:
+    name: whoami
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+      # The permission to request a token *about this workflow run*. It does
+      # not grant write access to anything in the repository, despite how it
+      # reads. Without it the token request fails and the role cannot be
+      # assumed -- this is the line people forget.
+      id-token: write
+
+    steps:
+      - name: Assume the CI role
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          # An ARN is an identifier, not a credential. It is safe in a workflow
+          # file, which is the entire point of OIDC -- the trust policy on the
+          # role decides who may assume it, not the secrecy of its name.
+          #
+          # It lives in a repository *variable* rather than inline only because
+          # this repository is public and the ARN contains the account ID.
+          # Variables are not secrets; they are non-secret configuration.
+          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Who am I
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity --output table
+
+          # The assumed-role ARN names the session, which GitHub sets to the
+          # workflow run. An audit log entry therefore points at the run that
+          # made the call.
+          arn=$(aws sts get-caller-identity --query Arn --output text)
+          case "$arn" in
+            *:assumed-role/*) echo "OK: short-lived session, no stored key" ;;
+            *) echo "::error::expected an assumed-role ARN, got $arn"; exit 1 ;;
+          esac

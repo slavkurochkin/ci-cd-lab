@@ -1,0 +1,20 @@
+# zizmor configuration. See docs.zizmor.sh/configuration.
+#
+# Only one rule is suppressed, and the reason is below. Everything else is an
+# error that fails CI -- including `unpinned-uses`, which is what enforces the
+# SHA pinning rather than a separate check.
+
+rules:
+  self-repository:
+    ignore:
+      # zizmor prefers GitHub's newer `$/...` syntax over `./...` when a
+      # workflow calls an action or workflow from its own repository.
+      #
+      # We use `./...` on purpose. It is correct, not insecure -- the finding
+      # is a style preference, severity "low". `act` (Lab 03, `make ci-local`)
+      # does not understand `$/...`, and the whole point of that task is being
+      # able to run these jobs locally.
+      #
+      # Revisit when act supports it.
+      - reusable-service-ci.yml
+      - lab-03-ci.yml

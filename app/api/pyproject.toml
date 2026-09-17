@@ -15,6 +15,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "httpx>=0.28.0",
     "ruff>=0.8.0",
+    "mypy>=1.13.0",
 ]
 
 [build-system]
@@ -40,3 +41,45 @@ addopts = "-q -m 'not integration'"
 markers = [
     "integration: needs a real dependency (DynamoDB). Excluded from the default run.",
 ]
+
+[tool.coverage.run]
+source = ["api"]
+
+[tool.coverage.report]
+# store.py is excluded from the *unit* coverage floor, not from testing.
+#
+# It is the DynamoDB boundary, and it is exercised by tests/integration/, which
+# the default run excludes so the fast loop stays fast. Measuring it here would
+# report 32% and invite someone to write unit tests that mock the very boundary
+# the integration tests exist to check -- the number would rise and the testing
+# would get worse.
+#
+# A coverage gate that punishes correctly-structured code is a gate people
+# route around.
+omit = ["*/api/store.py"]
+
+# A floor, not a target. This is what the suite already achieves with store.py
+# excluded. Raise it when the real number rises; never lower it to pass a build.
+#
+# Note what it measures: whether a line executed. A test with no assertions
+# raises this number. The gate stops coverage falling silently; it cannot tell
+# you the tests are any good.
+fail_under = 100
+show_missing = true
+
+[tool.mypy]
+files = ["src"]
+python_version = "3.12"
+
+# Scoped, not global.
+#
+# boto3 ships no py.typed marker, so mypy cannot check calls into it. The quick
+# fix is `--ignore-missing-imports` on the command line, which silences this and
+# every other missing import -- including ones that indicate a real typo or a
+# dependency you forgot to declare.
+#
+# Naming the module keeps the exception visible and reviewable, and a new
+# untyped import still fails until someone decides about it.
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore.*"]
+ignore_missing_imports = true
