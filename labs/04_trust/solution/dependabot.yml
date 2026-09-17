@@ -1,0 +1,54 @@
+# Pinning actions to a SHA stops a tag being moved under you. It also stops you
+# receiving fixes, so a pin without an update mechanism is a slow leak of a
+# different kind. Dependabot rewrites the SHA and the trailing version comment
+# together, as a pull request the pipeline checks like any other.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    # `/` covers .github/workflows and a root action.yml -- it does NOT cover a
+    # composite action under .github/actions/. That gap is invisible: the pins
+    # in the composite action simply never get proposed, and nothing reports it.
+    # Found because five merged update pull requests left the composite action
+    # three major versions behind the workflows calling it.
+    directories:
+      - /
+      - /.github/actions/setup-service
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+
+    # Wait a week before proposing a newly published version.
+    #
+    # Automated updates and a compromised maintainer account are the same
+    # mechanism seen from two sides: a new version appears and something opens
+    # a pull request for it. The cooldown is the gap in which someone else
+    # notices and the release gets yanked. Dependabot's own default is three
+    # days; seven is what zizmor asks for.
+    cooldown:
+      default-days: 7
+
+    groups:
+      # Patch and minor updates are bundled. They are the weekly noise, they
+      # carry no promised breakage, and five separate pull requests a week is
+      # how people learn to merge these without reading them.
+      actions-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+      # Major updates are deliberately NOT grouped -- there is no entry for
+      # them here, so Dependabot opens one pull request per action.
+      #
+      # This config originally grouped everything with a bare `patterns: ["*"]`.
+      # The first pull request it produced bundled fifteen major version jumps
+      # across five actions. The tests happened to pass; had they failed, the
+      # cause could have been any of the five, and bisecting means unpicking a
+      # single commit by hand.
+      #
+      # A major version is a promise that something breaks. One per pull
+      # request means a red run names its own cause.

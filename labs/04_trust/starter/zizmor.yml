@@ -1,0 +1,17 @@
+# Lab 04 -- zizmor configuration (starter)
+#
+# See docs.zizmor.sh/configuration.
+#
+# TODO(lab-04-e2): Run `zizmor --offline .github/` and read what it reports.
+# Most findings are real and should be fixed rather than configured away.
+#
+# Exactly one is a style preference this repository disagrees with:
+# `self-repository` prefers GitHub's newer `$/...` syntax over `./...` for a
+# local action. `act` does not understand it, and running jobs locally is the
+# point of Lab 03's last task.
+#
+# Suppress that one rule, for the files it fires on, and write down why.
+# Do not reach for `--min-severity` instead: a threshold hides every future
+# finding at that level too, including ones you would want to see.
+
+rules: {}
