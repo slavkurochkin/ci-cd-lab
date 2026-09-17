@@ -90,13 +90,28 @@ jobs:
         with:
           service: ${{ inputs.service }}
 
+      # The build contract, cheapest first. Every service answers to the same
+      # six targets, so none of these steps knows whether it is running Python
+      # or Node -- see labs/03_abstraction.
       - name: Lint and format check
         working-directory: app/${{ inputs.service }}
         run: make lint
 
+      - name: Typecheck
+        working-directory: app/${{ inputs.service }}
+        run: make typecheck
+
       - name: Run tests
         working-directory: app/${{ inputs.service }}
         run: make test
+
+      # Separate from `make test` on purpose. The tests answer "does it work";
+      # this answers "is any of it unexercised", and the two fail for different
+      # reasons. Thresholds live with each service, not here -- what counts as
+      # covered is a property of the code, not of the pipeline.
+      - name: Coverage gate
+        working-directory: app/${{ inputs.service }}
+        run: make coverage
 
   # TODO(lab-03-e): Add an `integration` job that runs the API's integration
   # suite against a real DynamoDB.
