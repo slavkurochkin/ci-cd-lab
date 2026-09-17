@@ -35,10 +35,23 @@ on:
         required: false
         type: boolean
         default: false
+      publish:
+        description: >-
+          Whether to push the image. A pull request builds and scans but must
+          not publish, so the caller passes this only on the default branch.
+        required: false
+        type: boolean
+        default: false
     outputs:
       coverage-artifact:
         description: Name of the artifact holding this service's coverage report.
         value: ${{ jobs.test.outputs.coverage-artifact }}
+      image-digest:
+        description: >-
+          Digest of the published image, or empty when this call did not
+          publish. A digest is the only identifier that cannot come to mean
+          something else later -- deploy this, not a tag.
+        value: ${{ jobs.image.outputs.digest }}
 
 # A reusable workflow does not inherit the caller's permissions -- it declares
 # its own, and the caller can only narrow them further. Nothing here writes to
@@ -184,3 +197,141 @@ jobs:
           DYNAMODB_ENDPOINT: http://localhost:8000
           AWS_REGION: us-east-1
         run: make test-integration
+
+  # The second half of the build contract. It runs only after the first half
+  # passed: there is no point building an image from code that does not lint,
+  # typecheck, test or meet its coverage floor.
+  #
+  # `needs` includes integration, which is skipped for services that have no
+  # integration suite -- hence `always()` plus an explicit result check, the
+  # same shape as an aggregate job. Without it, a skipped dependency would skip
+  # this too.
+  image:
+    name: ${{ inputs.service }} image
+    needs: [test, integration]
+    if: |
+      always()
+      && needs.test.result == 'success'
+      && needs.integration.result != 'failure'
+      && needs.integration.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+
+    env:
+      REGISTRY: ghcr.io
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      # Without this, buildx falls back to an anonymous token and GHCR answers
+      # 403 at push time -- after the build and the scan have already run. The
+      # job's `packages: write` permission grants the right; GITHUB_TOKEN is
+      # how it is presented.
+      - name: Log in to the registry
+        if: inputs.publish
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out the tags
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ inputs.service }}
+          # No `latest`. A mutable tag cannot tell you what is running -- ask
+          # it twice and it may answer differently. The SHA tag is the one to
+          # deploy; the semver tag exists for humans reading a release page.
+          tags: |
+            type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=pr
+
+      # Built and loaded locally first, so the scan below has something to
+      # inspect that has not been published yet.
+      - name: Build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: app/${{ inputs.service }}
+          load: true
+          tags: local/${{ inputs.service }}:scan
+          build-args: GIT_SHA=${{ github.sha }}
+          # The registry-backed Actions cache. Layers survive between runs, so
+          # a source-only change reuses the dependency layer -- which is what
+          # the Dockerfile's layer order was written for.
+          cache-from: type=gha,scope=${{ inputs.service }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.service }}
+
+      - name: Scan for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: local/${{ inputs.service }}:scan
+          format: table
+          # The gate. Anything HIGH or CRITICAL fails the job and nothing is
+          # published. Note `ignore-unfixed`: a vulnerability with no available
+          # fix cannot be acted on, and failing on it teaches people to add
+          # blanket ignores, which is worse than not scanning.
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      # Only reached when the scan passed. The layers are already built, so
+      # this is a push rather than a rebuild.
+      - name: Push
+        id: push
+        if: inputs.publish
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: app/${{ inputs.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ inputs.service }}
+          # A software bill of materials: what is inside the image, attached to
+          # the image. During an incident the question is "which of our images
+          # contain this package", and without an SBOM the answer is a guess.
+          sbom: true
+          provenance: mode=max
+
+      - name: Attest build provenance
+        if: inputs.publish
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository }}/${{ inputs.service }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Report what was published
+        if: inputs.publish
+        # Values reach the shell through env, never interpolated into the
+        # script. `${{ }}` inside a `run:` block is textual substitution before
+        # the shell sees it, so a value containing shell syntax becomes shell
+        # syntax. These particular values are safe; the habit is what matters,
+        # and it is the same rule Project 4 applies to github.event.*.
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository }}/${{ inputs.service }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "digest: $DIGEST"
+          echo
+          echo "Verify from anywhere:"
+          echo "  gh attestation verify oci://${IMAGE}@${DIGEST} --repo ${REPO}"

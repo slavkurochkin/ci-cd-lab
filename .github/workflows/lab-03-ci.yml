@@ -95,6 +95,9 @@ jobs:
       service: api
       versions: '["3.11", "3.12", "3.13"]'
       run-integration-tests: true
+      # Publish from the default branch only. A pull request builds and scans
+      # the image -- which is the gate -- but must not put it in the registry.
+      publish: ${{ github.ref == 'refs/heads/main' }}
 
   worker:
     needs: changes
@@ -103,6 +106,7 @@ jobs:
     with:
       service: worker
       versions: '["20", "22"]'
+      publish: ${{ github.ref == 'refs/heads/main' }}
 
   ci-passed:
     name: ci-passed
