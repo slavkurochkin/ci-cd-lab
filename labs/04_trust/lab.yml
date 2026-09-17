@@ -1,0 +1,15 @@
+title: "Trust: Permissions, OIDC & Supply Chain"
+project: 4
+files:
+  - starter: starter/aws-identity.yml
+    target: .github/workflows/aws-identity.yml
+    solution: solution/aws-identity.yml
+  - starter: starter/security.yml
+    target: .github/workflows/security.yml
+    solution: solution/security.yml
+  - starter: starter/zizmor.yml
+    target: .github/zizmor.yml
+    solution: solution/zizmor.yml
+  - starter: starter/dependabot.yml
+    target: .github/dependabot.yml
+    solution: solution/dependabot.yml

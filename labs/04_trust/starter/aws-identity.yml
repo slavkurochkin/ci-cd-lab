@@ -1,0 +1,59 @@
+# Lab 04 -- proving CI can reach AWS with no stored credential (starter)
+#
+# infra/ci-oidc/ already contains the AWS side: an OIDC provider and a role
+# whose trust policy names one repository. Read it -- it is commented for
+# reading -- then make this workflow assume that role.
+#
+# Verify with:  make verify LAB=04
+name: AWS identity
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/aws-identity.yml'
+      - 'infra/ci-oidc/**'
+
+# TODO(lab-04-a): This workflow declares no `permissions:` at all, so every job
+# inherits whatever the repository default happens to be. A default is a
+# setting someone can change; a declaration travels with the file.
+#
+# Add a top-level `permissions:` granting the least this workflow needs.
+
+jobs:
+  whoami:
+    name: whoami
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # TODO(lab-04-b): Requesting an OIDC token needs one specific permission,
+    # and its name is misleading -- it does not grant write access to the
+    # repository. Without it the token request fails before AWS is contacted,
+    # which is the most common first error with OIDC.
+    #
+    # Add a job-level `permissions:` block with what this job needs.
+
+    steps:
+      # TODO(lab-04-c): Assume the role from infra/ci-oidc using
+      # aws-actions/configure-aws-credentials.
+      #
+      # Two things to get right:
+      #
+      #   - `role-to-assume` is an ARN, not a credential. It is safe in plain
+      #     sight in this file, which is the entire point of OIDC. Read it from
+      #     the repository variable AWS_CI_ROLE_ARN, which is set from the
+      #     stack's output (see the lab README).
+      #   - Pin the action to a commit SHA, not a tag. TODO(lab-04-e) adds the
+      #     check that enforces this, and it will fail on a tag.
+      #
+      # `aws-region` must be set even though IAM is global.
+
+      - name: Who am I
+        # TODO(lab-04-c): Call `aws sts get-caller-identity` and fail the job
+        # unless the ARN it returns is an *assumed-role* session.
+        #
+        # A long-lived IAM user would also answer this call successfully. The
+        # difference between `arn:aws:iam::...:user/...` and
+        # `arn:aws:sts::...:assumed-role/...` is the whole point of the lab, so
+        # check for it rather than trusting that the step above did its job.
+        run: echo 'replace this with the identity check'

@@ -1,0 +1,41 @@
+# Lab 04 -- keeping pinned versions current (starter)
+#
+# Pinning an action to a commit SHA stops a tag being moved under you. It also
+# stops you receiving fixes, so a pin with no update mechanism is a slow leak
+# of a different kind. This file is the mechanism.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+
+    # TODO(lab-04-d1): `directory: /` covers `.github/workflows` and a root
+    # `action.yml`, and nothing else. This repository has a composite action at
+    # .github/actions/setup-service/action.yml whose pins would therefore never
+    # be proposed -- silently, with no error and no warning.
+    #
+    # Use `directories:` to list every path that holds pinned actions.
+    directory: /
+
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+
+    # TODO(lab-04-d2): Add a cooldown.
+    #
+    # Automated updates and a compromised maintainer account are the same
+    # mechanism seen from two sides: a new version appears, and something opens
+    # a pull request for it. A cooldown is the gap in which someone else
+    # notices and the release is yanked. Dependabot's own default is three
+    # days; a week is a common choice.
+
+    # TODO(lab-04-d3): Group the updates -- but not all of them.
+    #
+    # Ungrouped, five actions produce five pull requests a week, which is how
+    # people learn to merge these without reading them. Grouped completely, a
+    # single pull request can carry fifteen major version jumps across five
+    # actions, and a red run names none of them.
+    #
+    # Bundle the update types that carry no promised breakage. Leave the type
+    # that does out of the group, so each one arrives on its own.
