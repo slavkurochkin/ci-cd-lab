@@ -90,19 +90,41 @@ jobs:
   api:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.api == 'true'
+    # A called workflow's permissions cannot exceed its caller's. The top-level
+    # block above grants `contents: read`, so without this the image job's
+    # request for packages/id-token/attestations is an escalation and the whole
+    # run fails to start -- before any job, with no log to read.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/reusable-service-ci.yml
     with:
       service: api
       versions: '["3.11", "3.12", "3.13"]'
       run-integration-tests: true
+      # Publish from the default branch only. A pull request builds and scans
+      # the image -- which is the gate -- but must not put it in the registry.
+      publish: ${{ github.ref == 'refs/heads/main' }}
 
   worker:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.worker == 'true'
+    # A called workflow's permissions cannot exceed its caller's. The top-level
+    # block above grants `contents: read`, so without this the image job's
+    # request for packages/id-token/attestations is an escalation and the whole
+    # run fails to start -- before any job, with no log to read.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/reusable-service-ci.yml
     with:
       service: worker
       versions: '["20", "22"]'
+      publish: ${{ github.ref == 'refs/heads/main' }}
 
   ci-passed:
     name: ci-passed

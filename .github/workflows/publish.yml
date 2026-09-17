@@ -10,12 +10,16 @@
 # the homogeneous variation Lab 02 said a matrix is for.
 name: Publish
 
+# Retired from automatic triggering.
+#
+# Capstone A folded these steps into reusable-service-ci.yml, so the repository
+# has one pipeline rather than two. Leaving this on `push` would publish every
+# image twice.
+#
+# The file stays because it is Lab 05's graded artifact: `make lab LAB=05`
+# installs a starter here, `make verify LAB=05` reads it, and it is still
+# runnable by hand. Deleting it would delete the lab.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
