@@ -90,6 +90,15 @@ jobs:
   api:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.api == 'true'
+    # A called workflow's permissions cannot exceed its caller's. The top-level
+    # block above grants `contents: read`, so without this the image job's
+    # request for packages/id-token/attestations is an escalation and the whole
+    # run fails to start -- before any job, with no log to read.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/reusable-service-ci.yml
     with:
       service: api
@@ -102,6 +111,15 @@ jobs:
   worker:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.worker == 'true'
+    # A called workflow's permissions cannot exceed its caller's. The top-level
+    # block above grants `contents: read`, so without this the image job's
+    # request for packages/id-token/attestations is an escalation and the whole
+    # run fails to start -- before any job, with no log to read.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/reusable-service-ci.yml
     with:
       service: worker
