@@ -943,7 +943,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 2 | Speed & Cost | [`labs/02_speed_and_cost`](labs/02_speed_and_cost) | Built |
 | 3 | Abstraction, Service Containers & the Local Loop | [`labs/03_abstraction`](labs/03_abstraction) | Built |
 | 4 | Trust: Permissions, OIDC & Supply Chain | [`labs/04_trust`](labs/04_trust) | Built |
-| 5 | Building & Publishing Containers | not yet written | **Done** |
+| 5 | Building & Publishing Containers | [`labs/05_containers`](labs/05_containers) | Built |
 | A | Capstone — The Golden Pipeline | — | Planned |
 | 6 | Terraform Fundamentals | — | Planned |
 | 7 | State, Drift & Collaboration | — | Planned |
@@ -966,8 +966,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 lab.
 
 Labs are written after the project is worked, not before -- the starter and the
-verifier are extracted from something that already runs. Project 5 is `Done` and
-its lab is not written yet.
+verifier are extracted from something that already runs.
 
 Projects 1–5 are the Automation domain, and **Capstone A** assembles them. Do
 not skip from 4 to Track B: Project 5 produces the container images, and the

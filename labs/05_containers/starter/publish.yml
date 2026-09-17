@@ -1,0 +1,113 @@
+# Lab 05 -- build, scan, publish, attest (starter)
+#
+# This workflow builds both images and stops. Five TODOs turn it into a
+# pipeline that produces an image you can prove things about.
+#
+#   make verify LAB=05
+name: Publish
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  image:
+    # TODO(lab-05-e2): This job reports as `api` and `worker`. So do jobs in
+    # three other workflows in this repository, and branch protection matches
+    # required checks by name alone -- so requiring `api` here would be
+    # satisfied by whichever workflow reported last.
+    #
+    # Give these a name nothing else uses.
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, worker]
+
+    # TODO(lab-05-b): Pushing to GHCR and signing an attestation each need a
+    # permission this job does not have. Signing uses OIDC, the same mechanism
+    # as Lab 04's AWS role -- so one of them will look familiar.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      # TODO(lab-05-b): Log in to the registry before anything tries to push.
+      #
+      # Without this, buildx falls back to an anonymous token and GHCR answers
+      # 403 -- after the build and the scan have already run. Note that the
+      # permission above grants the right; it does not present a credential.
+      #
+      # This step has no reason to run on a pull request, which publishes
+      # nothing.
+
+      # TODO(lab-05-a): Work out the tags with docker/metadata-action.
+      #
+      # Include the commit SHA and semver. Do NOT include `latest`: a mutable
+      # tag cannot tell you what is running, because asking twice may give
+      # different answers. The SHA tag is the one you would deploy.
+
+      - name: Build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: app/${{ matrix.service }}
+          # Loaded locally rather than pushed, so TODO(lab-05-c) has something
+          # to scan that has not been published yet. The ordering is the whole
+          # lesson: a scan after the push is a report, not a gate.
+          load: true
+          tags: local/${{ matrix.service }}:scan
+          build-args: GIT_SHA=${{ github.sha }}
+          # TODO(lab-05-a): Add a layer cache so a source-only change reuses
+          # the dependency layer. The Dockerfiles order their steps for this;
+          # without a cache backend that ordering buys nothing across runs.
+
+      # TODO(lab-05-c): Scan the image you just built and fail the job on
+      # anything HIGH or CRITICAL.
+      #
+      # One flag deserves thought rather than copying: a vulnerability with no
+      # available fix cannot be acted on. Failing on those teaches people to
+      # add blanket ignore files, which is worse than not scanning.
+
+      # TODO(lab-05-a): Push -- but only when this is not a pull request, and
+      # only because the scan above passed.
+      #
+      # Attach an SBOM. During an incident the question is "which of our images
+      # contain this package", and without one the answer is a guess.
+
+      # TODO(lab-05-e1): Attest the build provenance, so anyone can verify this
+      # digest came from this workflow and this commit. Signing uses a
+      # short-lived certificate obtained through OIDC -- no key is stored.
+
+  # TODO(lab-05-e2): Add an aggregate job for branch protection to require.
+  #
+  # The scan gate above blocks a *publish*. It does not block a *merge*: a
+  # failing job that no required check depends on leaves the pull request
+  # mergeable, so a vulnerable dependency can still land on main.
+  #
+  # One job, `needs:` the matrix, `if: always()` so it reports even when a leg
+  # was skipped, and a body that reads `needs.image.result` rather than passing
+  # unconditionally. Lab 02's ci-passed is the same shape.
