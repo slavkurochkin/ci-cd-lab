@@ -47,6 +47,25 @@ report() {
   fi
 }
 
+# For resources that are SUPPOSED to exist and are supposed to persist.
+#
+# These were findings once, before Capstone A created them on purpose. Leaving
+# them as findings is how a guardrail teaches people to ignore it: a sweep that
+# is red when everything is correct is a sweep nobody reads.
+#
+# $1 = label, $2 = what it costs, $3.. = command
+persistent() {
+  local label="$1" cost="$2"; shift 2
+  local output
+  output=$("$@" 2>/dev/null | tr -d '\r' | grep -v '^\s*$' || true)
+  if [ -z "$output" ]; then
+    printf '  %s-%s %-26s none %s(not created yet)%s\n' "$DIM" "$RESET" "$label" "$DIM" "$RESET"
+  else
+    printf '  %s✓%s %-26s %s%s%s\n' "$GREEN" "$RESET" "$label" "$DIM" "$cost" "$RESET"
+    while IFS= read -r line; do printf '      %s\n' "$line"; done <<<"$output"
+  fi
+}
+
 # Same, but for resources that are legitimately up while you work a lab.
 # $1 = label, $2 = rough cost per day, $3.. = command
 meter() {
@@ -93,9 +112,14 @@ report "API Gateway APIs"  aws apigatewayv2 get-apis --region "$REGION" \
   --query 'Items[].Name' --output text
 report "DynamoDB tables"   aws dynamodb list-tables --region "$REGION" \
   --query 'TableNames[]' --output text
-report "ECR repositories"  aws ecr describe-repositories --region "$REGION" \
+
+echo
+echo "Persistent by design -- these should exist and should NOT be destroyed"
+persistent "ECR repositories" "~\$0.03/mo, capped at 10 images each" \
+  aws ecr describe-repositories --region "$REGION" \
   --query 'repositories[].repositoryName' --output text
-report "S3 buckets"        aws s3api list-buckets --query 'Buckets[].Name' --output text
+persistent "S3 buckets" "~\$0/mo at this size" \
+  aws s3api list-buckets --query 'Buckets[].Name' --output text
 
 echo
 echo "Guardrails -- these SHOULD exist"
