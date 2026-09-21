@@ -2,7 +2,8 @@
 
 What runs on a change, why it is arranged that way, and what it costs.
 
-Measured 2026-09-21 against commit `3574784`.
+Measured 2026-09-21 against commit `3574784`. The registry section below was
+added when Capstone A moved publishing to ECR alongside GHCR.
 
 ---
 
@@ -153,6 +154,32 @@ better**, and the honest comparison is not "before vs after" but "the same
 change, filtered vs unfiltered."
 
 ---
+
+## Registries
+
+Images go to **two** places, for different reasons.
+
+| | Why | Cost |
+|---|---|---|
+| **GHCR** | public, free, and where `gh attestation verify` is cheapest | $0 |
+| **ECR** | what EKS pulls from in Track C, with no stored pull secret | ~$0.03/month |
+
+A pull secret would be a stored credential, which is the thing Project 4 spent
+its time removing — so ECR is not duplication, it is the prerequisite for
+deploying without a regression.
+
+**The retention cap is the whole cost control.** `infra/ecr` keeps ten tagged
+images and expires untagged after a day. Every merge pushes two images, so
+without a cap this grows forever, slowly enough that nobody notices.
+
+```bash
+aws ecr describe-images --repository-name ci-cd-lab/api --query 'length(imageDetails)'
+```
+
+Pushing to ECR needs the CI role, and that role is pinned to `main` and version
+tags — so **a pull request builds and scans but cannot reach either registry**.
+That is deliberate: see `docs/OIDC.md` for why a `:pull_request` subject is
+reachable by anyone who can open one.
 
 ## How to measure this yourself
 
