@@ -9,6 +9,10 @@ on:
     branches: [main]
   push:
     branches: [main]
+    # Tag pushes too, or the image job's `type=semver` patterns can never
+    # match. publish.yml used to carry this; the consolidation dropped it and
+    # nothing noticed, because a tag that builds nothing fails silently.
+    tags: ["v*"]
   workflow_dispatch:
 
 concurrency:
@@ -106,7 +110,7 @@ jobs:
       run-integration-tests: true
       # Publish from the default branch only. A pull request builds and scans
       # the image -- which is the gate -- but must not put it in the registry.
-      publish: ${{ github.ref == 'refs/heads/main' }}
+      publish: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
 
   worker:
     needs: changes
@@ -124,7 +128,7 @@ jobs:
     with:
       service: worker
       versions: '["20", "22"]'
-      publish: ${{ github.ref == 'refs/heads/main' }}
+      publish: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
 
   ci-passed:
     name: ci-passed
