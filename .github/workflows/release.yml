@@ -1,0 +1,113 @@
+# Capstone A -- turn a tag into a release.
+#
+# Semantic versions are chosen by a person and pushed as a tag. This workflow
+# does not decide the version, because deciding it is the part that needs
+# judgement: whether a change is breaking is a question about your users, not
+# about your diff.
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The same tag also triggers Lab 03 CI, which builds, scans and publishes the
+# images with matching semver tags. The two run in parallel; this one waits for
+# the images so a release never points at something that does not exist.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      # Creating a release writes to the repository.
+      contents: write
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The generated notes need history to find the previous tag. A
+          # shallow clone silently produces notes covering one commit.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Wait for the images
+        # A release that names an image nobody can pull is worse than a late
+        # release. Lab 03 CI is triggered by the same tag, so poll it rather
+        # than assuming it finished.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            status=$(gh run list --workflow lab-03-ci.yml --limit 20 \
+              --json headBranch,status,conclusion,event \
+              --jq "[.[] | select(.event==\"push\")][0] | \"\(.status) \(.conclusion)\"")
+            echo "attempt ${attempt}: ${status}"
+            case "$status" in
+              "completed success") echo "images published"; exit 0 ;;
+              "completed failure"|"completed cancelled")
+                echo "::error::the image build did not succeed; not releasing"
+                exit 1 ;;
+            esac
+            sleep 20
+          done
+          echo "::error::image build did not finish within 20 minutes"
+          exit 1
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # --generate-notes groups pull requests using .github/release.yml.
+          # --verify-tag refuses to invent a tag that is not really there.
+          # --notes-file content is PREPENDED to the generated notes, so the
+          # two compose. --verify-tag refuses to invent a tag that is not
+          # really there. The previous tag is found automatically; passing
+          # --notes-start-tag explicitly breaks on the first ever release,
+          # where there is no previous tag to name.
+          gh release create "$TAG" \
+            --repo "$REPO" \
+            --title "$TAG" \
+            --verify-tag \
+            --generate-notes \
+            --notes-file - <<NOTES
+          Images published for this release:
+
+          \`\`\`
+          ghcr.io/${REPO}/api:${TAG}
+          ghcr.io/${REPO}/worker:${TAG}
+          \`\`\`
+
+          Those are tags. Resolve one to a digest before you deploy it -- a tag
+          can be repointed, a digest cannot:
+
+          \`\`\`bash
+          docker buildx imagetools inspect ghcr.io/${REPO}/api:${TAG} --format '{{.Manifest.Digest}}'
+          \`\`\`
+
+          Verify provenance, which proves the image came from this workflow and
+          this commit:
+
+          \`\`\`bash
+          gh attestation verify oci://ghcr.io/${REPO}/api:${TAG} --repo ${REPO}
+          \`\`\`
+          NOTES
+
+      - name: Say where it went
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: echo "https://github.com/${REPO}/releases/tag/${TAG}"
