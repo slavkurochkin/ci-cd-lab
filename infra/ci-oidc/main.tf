@@ -46,20 +46,28 @@ resource "aws_iam_role" "ci" {
         # to `repo:owner/*` and any repo you own can, including a fork you
         # create years from now and forget about.
         #
-        # The trailing `:*` allows any branch, tag and pull request. That is
-        # deliberate while the role grants nothing but its own identity -- you
-        # want this working from feature branches throughout Track B. Narrow it
-        # to `:ref:refs/heads/main` before attaching any policy that can change
-        # infrastructure.
+        # Narrowed when infra/ecr gave this role its first real permission.
         #
-        # Both spellings are listed because GitHub is moving from the first to
-        # the second, and a StringLike list matches if ANY entry matches. The
-        # immutable form is the one actually presented today -- see the
-        # github_owner_id / github_repo_id variables for why it exists.
+        # It used to end in `:*`, which was defensible while the role granted
+        # nothing but its own identity. `:*` includes `:pull_request`, and a
+        # pull_request subject names the repository the pull request targets --
+        # not whoever wrote the code. Anyone able to open a pull request
+        # matched it. With ECR push attached, that would have been anyone able
+        # to open a pull request being able to push an image.
+        #
+        # Now: the default branch, and version tags for releases. Nothing else.
+        #
+        # Both spellings of each are listed because GitHub is moving from the
+        # first form to the second, and a StringLike list matches if ANY entry
+        # matches. The immutable form embedding numeric IDs is the one actually
+        # presented today -- see the github_owner_id / github_repo_id variables
+        # for why it exists.
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repo}:*",
-            "repo:${local.owner}@${var.github_owner_id}/${local.name}@${var.github_repo_id}:*",
+            "repo:${var.github_repo}:ref:refs/heads/main",
+            "repo:${var.github_repo}:ref:refs/tags/v*",
+            "repo:${local.owner}@${var.github_owner_id}/${local.name}@${var.github_repo_id}:ref:refs/heads/main",
+            "repo:${local.owner}@${var.github_owner_id}/${local.name}@${var.github_repo_id}:ref:refs/tags/v*",
           ]
         }
       }

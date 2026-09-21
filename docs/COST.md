@@ -39,6 +39,58 @@ A cluster left up for three weeks costs **$92** — that, and nothing else, is t
 failure mode this document exists to prevent. The hourly rate is not the risk.
 Forgetting is the risk.
 
+## The other exception: things that bill continuously
+
+Everything above bills **while it exists** and stops when you destroy it. From
+Capstone A there is one thing that does not come down at the end of a session,
+and the rule for it is different.
+
+| Resource | Rate | Lives for |
+|---|---|---|
+| **ECR repositories** | $0.10/GB/month | Years. The images Track C pulls are stored here. |
+| **IAM role and OIDC provider** | $0 | Years. |
+
+### What ECR actually costs here
+
+Measured, not quoted. The compressed sizes in a registry are much smaller than
+`docker images` reports:
+
+| | Local | In the registry |
+|---|---|---|
+| `api` | 259MB | **69MB** |
+| `worker` | 250MB | **77MB** |
+
+So one retained version of both services is about **146MB, or $0.015/month**.
+The first **500MB of private ECR storage is free for twelve months**, which
+covers ten retained versions comfortably.
+
+### The risk is accumulation, not the rate
+
+Every merge pushes two images. Without a retention rule that grows forever, and
+the bill grows with it — slowly enough that nobody notices for a year.
+
+`infra/ecr` caps it:
+
+| Rule | Effect |
+|---|---|
+| Expire untagged after 1 day | removes layers orphaned by a retag |
+| Keep the 10 most recent tagged | bounds the total, whatever the merge rate |
+
+Ten is enough to roll back several releases and small enough to stay inside the
+free tier. **That number is the entire cost control.** If you raise it, you are
+choosing a bill.
+
+### Checking it
+
+```bash
+aws ecr describe-repositories --query 'repositories[].repositoryName'
+aws ecr describe-images --repository-name ci-cd-lab/api \
+  --query 'length(imageDetails)'
+```
+
+`make aws-sweep` does not flag these, deliberately — it lists what should not
+be running, and these are supposed to exist.
+
 ## What this curriculum still never provisions
 
 | Resource | Roughly | Why it is excluded |

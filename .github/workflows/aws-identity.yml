@@ -8,12 +8,24 @@
 # Requires infra/ci-oidc to be applied.
 name: AWS identity
 
+# Not on pull_request, deliberately.
+#
+# The role's trust policy used to accept any subject, including
+# `:pull_request`. Once infra/ecr gave it push access that became untenable --
+# a pull_request subject names the repository the pull request targets, not
+# whoever wrote the code, so anyone able to open one would have matched.
+#
+# The policy now accepts the default branch and version tags only, which means
+# this workflow cannot succeed from a pull request. Running it there would
+# produce a red check that is correct and unfixable.
 on:
   workflow_dispatch:
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - '.github/workflows/aws-identity.yml'
       - 'infra/ci-oidc/**'
+      - 'infra/ecr/**'
 
 permissions:
   contents: read

@@ -287,10 +287,20 @@ aws iam list-attached-role-policies --role-name <role>   # []
 aws iam list-role-policies --role-name <role>            # []
 ```
 
-That is deliberate and it is the only reason `:*` is acceptable here. The first
-role that gains real permissions — the Terraform role in Project 6 — gets
-pinned to `main`, and anything that deploys gets an environment with a reviewer
-on top.
+**That changed in Capstone A.** Giving the role ECR push access made it the
+first role that could change something, so the subject was narrowed the same
+day:
+
+```
+repo:OWNER/NAME:ref:refs/heads/main
+repo:OWNER/NAME:ref:refs/tags/v*
+```
+
+A pull request can no longer assume it. One consequence worth knowing: the
+identity-check workflow had to move off `pull_request`, because a run from
+there now produces a failure that is correct and unfixable.
+
+The rule held in practice, in other words, and it cost one workflow trigger.
 
 ---
 

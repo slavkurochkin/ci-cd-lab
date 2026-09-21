@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars. That file is gitignored.
+#
+# Every value here has a working default, so an empty file is valid. They are
+# shown so you can see what you are getting without reading variables.tf.
+
+# region          = "us-east-1"     # must match where EKS runs
+# services        = ["api", "worker"]
+# retained_images = 10              # the only thing bounding the storage bill
+# ci_role_name    = "ci-cd-lab-ci"  # created by infra/ci-oidc, not here
