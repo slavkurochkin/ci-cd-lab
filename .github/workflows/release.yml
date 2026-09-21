@@ -63,6 +63,30 @@ jobs:
           echo "::error::image build did not finish within 20 minutes"
           exit 1
 
+      - name: Check the images are really there
+        # The step above proves the build succeeded. It does not prove the tags
+        # this release is about to advertise exist -- and they did not, the
+        # first time: metadata-action strips the leading `v`, so the notes named
+        # ghcr.io/.../api:v0.1.0 while the registry held 0.1.0.
+        #
+        # Resolving each tag turns a wrong-name bug into a failed release rather
+        # than a release full of commands that 404.
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          for service in api worker; do
+            ref="ghcr.io/${REPO}/${service}:${VERSION}"
+            # `--format '{{.Manifest.Digest}}'` silently prints the whole
+            # inspect instead of the field. Reading the Digest line is uglier
+            # and actually returns a digest.
+            digest=$(docker buildx imagetools inspect "$ref" | awk '/^Digest:/{print $2; exit}')
+            test -n "$digest"
+            echo "${ref} -> ${digest}"
+          done
+
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -70,6 +94,11 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+
+          # docker/metadata-action's {{version}} strips the leading `v`, so the
+          # git tag v0.1.0 becomes the image tag 0.1.0. Naming the git tag in
+          # the notes produces instructions that 404.
+          VERSION="${TAG#v}"
 
           # --generate-notes groups pull requests using .github/release.yml.
           # --verify-tag refuses to invent a tag that is not really there.
@@ -87,22 +116,22 @@ jobs:
           Images published for this release:
 
           \`\`\`
-          ghcr.io/${REPO}/api:${TAG}
-          ghcr.io/${REPO}/worker:${TAG}
+          ghcr.io/${REPO}/api:${VERSION}
+          ghcr.io/${REPO}/worker:${VERSION}
           \`\`\`
 
           Those are tags. Resolve one to a digest before you deploy it -- a tag
           can be repointed, a digest cannot:
 
           \`\`\`bash
-          docker buildx imagetools inspect ghcr.io/${REPO}/api:${TAG} --format '{{.Manifest.Digest}}'
+          docker buildx imagetools inspect ghcr.io/${REPO}/api:${VERSION} --format '{{json .Manifest.Digest}}'
           \`\`\`
 
           Verify provenance, which proves the image came from this workflow and
           this commit:
 
           \`\`\`bash
-          gh attestation verify oci://ghcr.io/${REPO}/api:${TAG} --repo ${REPO}
+          gh attestation verify oci://ghcr.io/${REPO}/api:${VERSION} --repo ${REPO}
           \`\`\`
           NOTES
 
