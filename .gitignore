@@ -29,3 +29,6 @@ kubeconfig
 
 # macOS
 .DS_Store
+
+# Terraform-generated artifacts from infra/sandbox
+infra/sandbox/generated/
