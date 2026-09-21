@@ -2,11 +2,13 @@
 
 A practice-first CI/CD curriculum: GitHub Actions, Terraform on AWS, and Kubernetes, from a first green check to a governed delivery platform.
 
-Eighteen projects across four domains, three cumulative capstones, and a lab for each — theory in the README, deliberate gaps in real config files, and a verifier that tells you when you have closed them.
+Eighteen projects across four domains and three cumulative capstones. Each has theory in a README, deliberate gaps in real config files, and a verifier that tells you when you have closed them. **Labs exist for Projects 1–5**; the rest are specified in the roadmap and worked from there — see the Progress table.
 
 **Tracks A and B cost $0** — public repository (unlimited runner minutes) and AWS free tier only. **Track C costs about $10–25/month** from Project 13, where the cluster becomes a real EKS cluster you create at the start of a session and destroy at the end of it (`make eks-up` / `make eks-down`, ~$0.21/hr while up). Projects 10–12 stay on minikube and stay free. See [docs/COST.md](docs/COST.md) for the rates, the teardown procedure, and the resources this curriculum still never creates.
 
 **→ [ROADMAP.md](ROADMAP.md) is the curriculum.** Start there.
+
+Already working in this repository? [CONTRIBUTING.md](CONTRIBUTING.md) is the build contract, and [docs/PIPELINE.md](docs/PIPELINE.md) is what the pipeline looks like and what it costs.
 
 ---
 
