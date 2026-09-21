@@ -945,7 +945,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 4 | Trust: Permissions, OIDC & Supply Chain | [`labs/04_trust`](labs/04_trust) | Built |
 | 5 | Building & Publishing Containers | [`labs/05_containers`](labs/05_containers) | Built |
 | A | Capstone — The Golden Pipeline | no lab — worked from this file | **Done** |
-| 6 | Terraform Fundamentals | — | Planned |
+| 6 | Terraform Fundamentals | [`labs/06_terraform`](labs/06_terraform) | Built |
 | 7 | State, Drift & Collaboration | — | Planned |
 | 8 | Modules & Composition | — | Planned |
 | 9 | Terraform in CI | — | Planned |

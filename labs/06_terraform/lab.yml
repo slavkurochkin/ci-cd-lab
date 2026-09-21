@@ -1,0 +1,12 @@
+title: "Terraform Fundamentals"
+project: 6
+files:
+  - starter: starter/sandbox-main.tf
+    target: infra/sandbox/main.tf
+    solution: solution/sandbox-main.tf
+  - starter: starter/sandbox-outputs.tf
+    target: infra/sandbox/outputs.tf
+    solution: solution/sandbox-outputs.tf
+  - starter: starter/account-main.tf
+    target: infra/account/main.tf
+    solution: solution/account-main.tf
