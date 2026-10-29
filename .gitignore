@@ -21,6 +21,10 @@ crash.log
 # Never commit variable files -- they routinely hold account IDs and secrets.
 *.auto.tfvars
 terraform.tfvars
+# Except the environments' inputs (Capstone B): an environment name, a
+# retention period and an image digest. Committing them is how a deploy is
+# reviewed. Nothing secret or account-specific belongs in them.
+!infra/envs/*/terraform.tfvars
 # The state bucket's name contains the account ID. See infra/backend.hcl.example.
 infra/backend.hcl
 # Local-backend overrides, used before Project 7 creates the state bucket.

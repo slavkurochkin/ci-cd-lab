@@ -9,7 +9,7 @@ terraform {
   }
 
   # Its own key, so its own state and its own lock. Nothing run in this
-  # directory can read, lock or change prod's state.
+  # directory can read, lock or change another environment's state.
   backend "s3" {
     key          = "envs/dev/terraform.tfstate"
     region       = "us-east-1"
@@ -25,7 +25,7 @@ provider "aws" {
     tags = {
       Project     = "ci-cd-lab"
       Lab         = "07"
-      Environment = "dev"
+      Environment = var.environment
       ManagedBy   = "terraform"
       # Since Project 9, CI applies this environment. The tag says where to
       # look for the code and the run that last changed it.
@@ -34,4 +34,3 @@ provider "aws" {
   }
 }
 
-data "aws_caller_identity" "current" {}

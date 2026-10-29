@@ -1,13 +1,23 @@
-# The prod environment: the same module as ../dev, with its own state and its
-# own settings.
+# One environment, built from modules/environment. Capstone B.
+#
+# This file is the same in every directory under infra/envs. What differs is
+# terraform.tfvars (the inputs) and the backend key in versions.tf (the state).
+# Set enabled = false and merge, and CI destroys the environment.
 #
 #   terraform init -backend-config=../../backend.hcl
 
-module "data_bucket" {
-  source = "../../modules/s3-bucket"
+module "env" {
+  source = "../../modules/environment"
+  count  = var.enabled ? 1 : 0
 
-  name = "ci-cd-lab-prod-${data.aws_caller_identity.current.account_id}"
+  environment          = var.environment
+  api_image_digest     = var.api_image_digest
+  data_noncurrent_days = var.data_noncurrent_days
+}
 
-  # A bad overwrite in prod tends to be found late, so keep a quarter of history.
-  noncurrent_days = 90
+# Before Capstone B the data bucket was a module of its own here. Harmless in
+# an environment that never had it.
+moved {
+  from = module.data_bucket
+  to   = module.env[0].module.data_bucket
 }
