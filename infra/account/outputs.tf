@@ -1,6 +1,6 @@
 output "bucket_name" {
   description = "Globally unique, because S3 bucket names are shared across every AWS account."
-  value       = aws_s3_bucket.artifacts.id
+  value       = module.artifacts.id
 }
 
 output "budget_name" {

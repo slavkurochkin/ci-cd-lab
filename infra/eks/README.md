@@ -60,6 +60,6 @@ it, and its ENIs hold your subnets open. `scripts/eks-down.sh` deletes those
 Services first, then runs destroy, then deletes anything that survived, then
 sweeps. It is safe to run twice.
 
-State is **local**, deliberately — remote state is Project 8's subject. If you
+State is **local**. Project 7 moved the long-lived stacks to S3 and left this one, because nothing here outlives a session. If you
 lose the state file, `make eks-down` still empties the account, because it does
 not rely on Terraform knowing what exists.

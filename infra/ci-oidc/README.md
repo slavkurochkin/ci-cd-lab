@@ -5,8 +5,10 @@ applied.
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars   # set github_repo
-terraform init && terraform apply              # ~10 seconds, 2 resources
+terraform init -backend-config=../backend.hcl && terraform apply              # ~10 seconds, 2 resources
 ```
+
+State lives in the S3 bucket from `infra/state` (Project 7), and `infra/backend.hcl` names it. If you are working through the curriculum before Project 7, there is no bucket yet: create a gitignored `backend_override.tf` here containing `terraform {` / `backend "local" {}` / `}` on three lines, and delete it when Project 7 moves the state.
 
 Unlike `infra/eks`, there is no teardown step. IAM roles, policies and OIDC
 providers are free, so this stack has no reason to be destroyed at the end of a
@@ -102,4 +104,4 @@ terraform import aws_iam_openid_connect_provider.github \
 terraform import aws_iam_role.ci ci-cd-lab-ci
 ```
 
-That asymmetry is the concrete argument for remote state, which is Project 8.
+That asymmetry is the concrete argument for remote state. Since Project 7 this stack's state lives in S3 (`ci-oidc/terraform.tfstate` in the state bucket), not on one laptop.
