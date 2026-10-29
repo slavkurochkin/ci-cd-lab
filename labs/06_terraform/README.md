@@ -8,7 +8,7 @@
 
 ## Before you start
 
-**These files already exist solved on `main`**, and `infra/account` has live Terraform state pointing at real AWS resources. Work on a branch:
+**These files already exist solved on `main`.** Work on a branch:
 
 ```bash
 git switch -c lab-06
@@ -18,10 +18,12 @@ make reset LAB=06
 To abandon the attempt:
 
 ```bash
-git checkout main -- infra/sandbox/main.tf infra/sandbox/outputs.tf infra/account/main.tf
+git checkout main -- infra/sandbox/main.tf infra/sandbox/outputs.tf infra/lab-06-account/main.tf
 ```
 
-**The state files are not part of the starter and must not be deleted.** `infra/account/terraform.tfstate` is the only record that the budget is managed. Resetting the `.tf` files is safe; removing state is how you end up with two budgets and a failed apply.
+**The account tasks run in `infra/lab-06-account`, not `infra/account`.** `infra/account` is the real stack. From Project 7 its state lives in S3 and manages the artifacts bucket and the budget for good. `infra/lab-06-account` is a practice copy with its own local state and its own bucket, `ci-cd-lab-lab06-<account-id>`, so nothing you do here can change the real stack.
+
+The one thing the two share is the budget, because Task E imports the budget that already exists. Read *Teardown* below before you destroy anything.
 
 ---
 
@@ -127,7 +129,13 @@ make reset LAB=06
 cd infra/sandbox && terraform init
 ```
 
-The sandbox module needs no credentials. `infra/account` needs your AWS profile and a `terraform.tfvars` with `budget_email`.
+The sandbox module needs no credentials. `infra/lab-06-account` needs your AWS profile and a `terraform.tfvars` with `budget_email`:
+
+```bash
+cd infra/lab-06-account
+cp terraform.tfvars.example terraform.tfvars   # set budget_email
+terraform init
+```
 
 ---
 
@@ -191,7 +199,7 @@ grep -o 'BEGIN [A-Z ]*PRIVATE KEY' terraform.tfstate
 
 Covers: why "we have a bucket" says nothing about whether it is safe.
 
-In `infra/account/main.tf`: a bucket named using the account ID, plus versioning, encryption, a public access block with **all four** flags, and a lifecycle rule expiring noncurrent versions.
+In `infra/lab-06-account/main.tf`: a bucket named `ci-cd-lab-lab06-<account-id>`, plus versioning, encryption, a public access block with **all four** flags, and a lifecycle rule expiring noncurrent versions.
 
 **What to observe:**
 - Comment out the public access block and run `plan`. Terraform is perfectly happy. Nothing warns you.
@@ -223,6 +231,22 @@ terraform plan            # read the difference that remains
 
 **Questions to reflect on:**
 - Nothing in this lab detected the drift. You knew because you created it. How would you find one you did not know about, in an account with three hundred resources?
+
+---
+
+## Teardown
+
+**Remove the budget from this state before you destroy.** After Task E, two things manage `ci-cd-lab-monthly`: this practice state and, from Project 7, `infra/account`. `terraform destroy` here would delete the real budget.
+
+```bash
+cd infra/lab-06-account
+terraform state rm aws_budgets_budget.monthly   # forget it; AWS keeps it
+terraform destroy                               # the lab06 bucket and its four settings
+```
+
+`state rm` changes only what Terraform remembers. The budget stays in your account. Project 7 covers what that command does in more detail, and how it goes wrong.
+
+The sandbox needs only `terraform destroy` in `infra/sandbox`, and it touches nothing in AWS.
 
 ---
 

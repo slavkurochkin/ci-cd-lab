@@ -15,7 +15,7 @@ resource "aws_s3_bucket" "artifacts" {
   # Bucket names are globally unique across every AWS account on earth, so the
   # account ID is part of the name. Without it, `terraform apply` fails with
   # BucketAlreadyExists for a bucket you cannot see and do not own.
-  bucket = "ci-cd-lab-artifacts-${data.aws_caller_identity.current.account_id}"
+  bucket = "ci-cd-lab-lab06-${data.aws_caller_identity.current.account_id}"
 }
 
 resource "aws_s3_bucket_versioning" "artifacts" {

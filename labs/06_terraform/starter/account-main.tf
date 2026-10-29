@@ -9,6 +9,11 @@
 # the name from the account ID -- there is a `data "aws_caller_identity"` in
 # versions.tf for it. Without that, apply fails with BucketAlreadyExists for a
 # bucket you cannot see and do not own.
+#
+# Call it ci-cd-lab-lab06-<account-id>. Not ci-cd-lab-artifacts-<account-id>:
+# that bucket belongs to infra/account. In us-east-1, S3 answers a create for
+# a bucket you already own with success rather than an error, so the mistake
+# may not fail -- it gives one bucket two owners.
 
 # TODO(lab-06-d2): Secure it. This takes FOUR more resources, not four
 # arguments:

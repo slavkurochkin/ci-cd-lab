@@ -15,7 +15,7 @@ import pytest
 from labcheck.paths import repo_root
 
 SANDBOX = "infra/sandbox"
-ACCOUNT = "infra/account"
+ACCOUNT = "infra/lab-06-account"
 
 
 def _read(relative: str) -> str:
@@ -241,12 +241,12 @@ def test_budget_is_in_state_not_just_in_the_account():
     """The drift test. Declaring the resource is not the same as managing it."""
     result = _terraform(ACCOUNT, "state", "list")
     if result.returncode != 0:
-        pytest.skip("terraform state is not initialised in infra/account")
+        pytest.skip("terraform state is not initialised in infra/lab-06-account")
     assert "aws_budgets_budget" in result.stdout, (
         "TODO(lab-06-e): the budget is declared but not in state, so Terraform thinks it\n"
         "  must create one that already exists -- an apply that fails.\n"
         "  Close the gap:\n"
-        "    terraform -chdir=infra/account import aws_budgets_budget.monthly \\\n"
+        "    terraform -chdir=infra/lab-06-account import aws_budgets_budget.monthly \\\n"
         "      \"<account-id>:ci-cd-lab-monthly\""
     )
 

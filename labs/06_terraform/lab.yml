@@ -8,5 +8,5 @@ files:
     target: infra/sandbox/outputs.tf
     solution: solution/sandbox-outputs.tf
   - starter: starter/account-main.tf
-    target: infra/account/main.tf
+    target: infra/lab-06-account/main.tf
     solution: solution/account-main.tf
