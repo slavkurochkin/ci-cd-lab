@@ -45,3 +45,21 @@ run "every_input_reaches_its_resource" {
     error_message = "retained_images did not reach the tagged rule."
   }
 }
+
+run "lambda_pull_adds_a_repository_policy" {
+  command = plan
+
+  variables {
+    lambda_pull_source_arns = ["arn:aws:lambda:us-east-1:123456789012:function:ci-cd-lab-*"]
+  }
+
+  assert {
+    condition     = length(aws_ecr_repository_policy.lambda_pull) == 1
+    error_message = "A repository Lambda pulls from needs a repository policy."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecr_repository_policy.lambda_pull[0].policy).Statement[0].Principal.Service == "lambda.amazonaws.com"
+    error_message = "The policy must allow the Lambda service, not a role."
+  }
+}

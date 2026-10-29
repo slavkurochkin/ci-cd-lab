@@ -154,6 +154,7 @@ What counts as breaking: removing or renaming a variable or output, adding a req
 | ---- | ---- |
 | [aws_ecr_lifecycle_policy.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecr_lifecycle_policy) | resource |
 | [aws_ecr_repository.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecr_repository) | resource |
+| [aws_ecr_repository_policy.lambda_pull](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecr_repository_policy) | resource |
 
 ## Inputs
 
@@ -161,6 +162,7 @@ What counts as breaking: removing or renaming a variable or output, adding a req
 | ---- | ----------- | ---- | ------- | :------: |
 | name | Repository name, e.g. `ci-cd-lab/api`. Lowercase, and slashes for namespaces. | `string` | n/a | yes |
 | immutable\_tags | Refuse to push a tag that already exists. Leave this on unless you have a reason a tag should change meaning. | `bool` | `true` | no |
+| lambda\_pull\_source\_arns | Lambda function ARNs (wildcards allowed) that may pull from this repository. Empty: no repository policy. | `list(string)` | `[]` | no |
 | retained\_images | Tagged images to keep. Older ones expire. This is what keeps storage inside the free tier. | `number` | `10` | no |
 | retained\_releases | Release images to keep, matched by a semver tag such as `0.2.0`. Environments run these, so they must outlive ordinary builds. | `number` | `20` | no |
 | scan\_on\_push | Run ECR basic scanning on every push. | `bool` | `true` | no |

@@ -51,3 +51,12 @@ run "lifecycle_expires_untagged_first_keeps_releases_then_keeps_ten" {
     error_message = "retained_images should default to 10."
   }
 }
+
+run "no_repository_policy_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_ecr_repository_policy.lambda_pull) == 0
+    error_message = "Nothing outside the account should be able to pull unless asked for."
+  }
+}
