@@ -3,7 +3,8 @@
 # These five resources started life in infra/account as top-level resources.
 # They moved here in Project 7, and the `moved` blocks in infra/account are
 # what kept that refactor from destroying and recreating the bucket.
-# Project 8 is where a module gets a proper interface, tests and docs.
+# ../ecr-repository is the Project 8 module: same idea, with tests and
+# generated docs.
 
 resource "aws_s3_bucket" "this" {
   bucket = var.name

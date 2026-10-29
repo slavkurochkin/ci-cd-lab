@@ -51,6 +51,7 @@ check docker    "Track A  (5+)"   "--cask docker"              optional
 check terraform "Track B, C (13)" "hashicorp/tap/terraform"    optional
 check aws       "Track B, C (13)" "awscli"                     optional
 check tflint    "Track B  (8-9)"  "terraform-linters/tap/tflint" optional
+check terraform-docs "Track B  (8)" "terraform-docs"           optional
 check checkov   "Track B  (9)"    "checkov"                    optional
 check kubectl   "Track C (10-14)" "kubernetes-cli"             optional
 check minikube  "Track C (10-12)" "minikube"                   optional

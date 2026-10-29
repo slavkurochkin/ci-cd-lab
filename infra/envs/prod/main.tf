@@ -11,7 +11,3 @@ module "data_bucket" {
   # A bad overwrite in prod tends to be found late, so keep a quarter of history.
   noncurrent_days = 90
 }
-
-output "bucket" {
-  value = module.data_bucket.id
-}

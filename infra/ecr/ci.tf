@@ -18,9 +18,39 @@ data "aws_iam_role" "ci" {
 
 data "aws_caller_identity" "current" {}
 
+locals {
+  # Every `sub` pattern the CI role's trust policy accepts. Flattened, because
+  # a condition value can be one string or a list of them.
+  ci_trusted_subjects = flatten([
+    for statement in jsondecode(data.aws_iam_role.ci.assume_role_policy).Statement : [
+      for operator, claims in try(statement.Condition, {}) : [
+        for claim, value in claims : value
+        if endswith(claim, ":sub")
+      ]
+    ]
+  ])
+
+  # A subject that anyone with a pull request or any branch can produce.
+  ci_open_subjects = [
+    for s in local.ci_trusted_subjects : s
+    if endswith(s, ":*") || strcontains(s, ":pull_request") || strcontains(s, "refs/heads/*")
+  ]
+}
+
 resource "aws_iam_role_policy" "ci_ecr_push" {
   name = "ecr-push"
   role = data.aws_iam_role.ci.name
+
+  lifecycle {
+    # The rule above, enforced. infra/ci-oidc owns the trust policy and this
+    # stack cannot change it, but it can refuse to grant push access to a role
+    # whose trust policy has been widened. A widened role still exists and
+    # still works; it just gets nothing from this stack.
+    precondition {
+      condition     = length(local.ci_open_subjects) == 0
+      error_message = "Refusing to grant ECR push: ${var.ci_role_name} trusts ${join(", ", local.ci_open_subjects)}. Pin its trust policy to a branch or environment in infra/ci-oidc first."
+    }
+  }
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -49,7 +79,7 @@ resource "aws_iam_role_policy" "ci_ecr_push" {
           "ecr:BatchGetImage",
           "ecr:GetDownloadUrlForLayer",
         ]
-        Resource = [for r in aws_ecr_repository.service : r.arn]
+        Resource = [for r in module.repository : r.arn]
       },
     ]
   })

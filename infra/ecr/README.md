@@ -14,6 +14,37 @@ State lives in the S3 bucket from `infra/state` (Project 7), and `infra/backend.
 Apply `infra/ci-oidc` first. This stack looks that role up by name to attach
 push permissions to it.
 
+## Adding a service
+
+Since Project 8, one line in `terraform.tfvars`:
+
+```hcl
+services = {
+  api    = {}
+  worker = {}
+  auth   = { retained_images = 3 }   # the new line; the override is optional
+}
+```
+
+The repository, its lifecycle policy and CI push access all follow from that line. `ci.tf` builds the push policy from `module.repository`, so it covers a new repository without being edited. `tests/ecr.tftest.hcl` checks exactly that, offline:
+
+```bash
+terraform test     # 3 passed, 0 failed
+```
+
+The settings themselves live in the module. Its [README](../modules/ecr-repository/README.md) explains them, and why `services` is a map rather than a list.
+
+## How this stack finds the CI role
+
+`infra/ci-oidc` creates the role and `infra/ecr` grants it push access, so one stack needs something from another. There are two ways to get it, and this stack uses the first:
+
+| | How | Needs | Breaks when |
+|---|---|---|---|
+| **Data source** (used) | `data "aws_iam_role" "ci" { name = var.ci_role_name }` | `iam:GetRole` | the role is renamed or deleted, at plan, with a clear error |
+| `terraform_remote_state` | read `infra/ci-oidc`'s outputs from its state file | `s3:GetObject` on that whole state file | the other stack renames an output |
+
+`terraform_remote_state` reads the entire state file, not only the outputs. Anyone who can plan this stack would also be able to read every value in `ci-oidc`'s state. A data source asks AWS about one resource. This is also why the precondition in `ci.tf` works: it reads the role's live trust policy, not what the other stack last recorded.
+
 ## Why this exists when GHCR already works
 
 **Track C pulls from it.** EKS pulling from GHCR needs an image pull secret — a
@@ -27,7 +58,7 @@ verification is cheapest; ECR is what the cluster will use.
 
 | | |
 |---|---|
-| Two repositories | `ci-cd-lab/api`, `ci-cd-lab/worker` |
+| Two repositories | `ci-cd-lab/api`, `ci-cd-lab/worker`, one [`ecr-repository`](../modules/ecr-repository) module per entry in `services` |
 | Lifecycle policy | expire untagged after 1 day, keep the 10 most recent tagged |
 | Scan on push | ECR's own continuous scan, alongside the Trivy gate in CI |
 | An inline policy on the CI role | push to these two repositories and nothing else |

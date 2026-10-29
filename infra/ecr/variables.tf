@@ -5,14 +5,23 @@ variable "region" {
 }
 
 variable "services" {
-  description = "One repository per service. Adding a service here is the only infrastructure change a new service needs."
-  type        = list(string)
-  default     = ["api", "worker"]
+  description = <<-DESC
+    One repository per service, keyed by service name. Adding a service is one
+    line: `newservice = {}`. Set retained_images to override the default for
+    that service only.
+  DESC
+  type = map(object({
+    retained_images = optional(number)
+  }))
+  default = {
+    api    = {}
+    worker = {}
+  }
 }
 
 variable "retained_images" {
   description = <<-DESC
-    How many tagged images to keep per repository.
+    How many tagged images to keep per repository, unless a service overrides it.
 
     This is the only thing standing between a per-merge push and an unbounded
     storage bill. Ten is enough to roll back several releases and small enough
