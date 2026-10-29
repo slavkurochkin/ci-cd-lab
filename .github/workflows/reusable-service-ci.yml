@@ -275,11 +275,24 @@ jobs:
 
       # The api image copies the Lambda Web Adapter from ECR Public. Anonymous
       # pulls get 1 per second and 500 GB a month, shared with every other
-      # GitHub runner behind the same IP, and two builds failed with
-      # `toomanyrequests`. Builds that publish have AWS credentials, so they
-      # pull authenticated. Pull request builds have none and stay anonymous.
+      # GitHub runner behind the same IP, and builds failed with
+      # `toomanyrequests` four times. Every build that can get an OIDC token
+      # now pulls authenticated: publishing builds with the CI role above,
+      # pull request builds with a role that can do nothing but this.
+      # Fork pull requests get no OIDC token and stay anonymous.
+      - name: Assume the public-pull role
+        if: >-
+          !inputs.publish
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_PUBLIC_PULL_ROLE_ARN }}
+          aws-region: us-east-1
+
       - name: Log in to ECR Public
-        if: inputs.publish && inputs.ecr-registry != ''
+        if: >-
+          (inputs.publish && inputs.ecr-registry != '')
+          || (!inputs.publish && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
         with:
           registry-type: public
