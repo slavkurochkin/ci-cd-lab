@@ -273,6 +273,17 @@ jobs:
         if: inputs.publish && inputs.ecr-registry != ''
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
 
+      # The api image copies the Lambda Web Adapter from ECR Public. Anonymous
+      # pulls get 1 per second and 500 GB a month, shared with every other
+      # GitHub runner behind the same IP, and two builds failed with
+      # `toomanyrequests`. Builds that publish have AWS credentials, so they
+      # pull authenticated. Pull request builds have none and stay anonymous.
+      - name: Log in to ECR Public
+        if: inputs.publish && inputs.ecr-registry != ''
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+        with:
+          registry-type: public
+
       - name: Work out the tags
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -287,8 +298,11 @@ jobs:
           # No `latest`. A mutable tag cannot tell you what is running -- ask
           # it twice and it may answer differently. The SHA tag is the one to
           # deploy; the semver tag exists for humans reading a release page.
+          # No sha- tag on a release build. main has usually pushed that tag
+          # already for the same commit, and the repositories are immutable:
+          # the v0.2.0 release failed on exactly that, after pushing 0.2.0.
           tags: |
-            type=sha,format=long
+            type=sha,format=long,enable=${{ github.ref_type != 'tag' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=ref,event=pr

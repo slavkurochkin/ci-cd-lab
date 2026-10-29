@@ -41,7 +41,7 @@ run "every_input_reaches_its_resource" {
   }
 
   assert {
-    condition     = jsondecode(aws_ecr_lifecycle_policy.this.policy).rules[1].selection.countNumber == 3
+    condition     = jsondecode(aws_ecr_lifecycle_policy.this.policy).rules[2].selection.countNumber == 3
     error_message = "retained_images did not reach the tagged rule."
   }
 }

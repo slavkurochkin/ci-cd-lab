@@ -162,6 +162,7 @@ What counts as breaking: removing or renaming a variable or output, adding a req
 | name | Repository name, e.g. `ci-cd-lab/api`. Lowercase, and slashes for namespaces. | `string` | n/a | yes |
 | immutable\_tags | Refuse to push a tag that already exists. Leave this on unless you have a reason a tag should change meaning. | `bool` | `true` | no |
 | retained\_images | Tagged images to keep. Older ones expire. This is what keeps storage inside the free tier. | `number` | `10` | no |
+| retained\_releases | Release images to keep, matched by a semver tag such as `0.2.0`. Environments run these, so they must outlive ordinary builds. | `number` | `20` | no |
 | scan\_on\_push | Run ECR basic scanning on every push. | `bool` | `true` | no |
 | tags | Extra tags for the repository. Provider `default_tags` still apply. | `map(string)` | `{}` | no |
 | untagged\_expiry\_days | Days before an untagged image expires. Untagged images are layers left behind by a retag, and nothing pulls them. | `number` | `1` | no |

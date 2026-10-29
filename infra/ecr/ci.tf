@@ -64,6 +64,18 @@ resource "aws_iam_role_policy" "ci_ecr_push" {
         Resource = "*"
       },
       {
+        # Capstone B. The api image copies the Lambda Web Adapter from ECR
+        # Public, which allows 1 anonymous pull a second and 500 GB a month to
+        # unauthenticated callers. GitHub's runners share IPs, and two builds
+        # failed with `toomanyrequests: Data limit exceeded`. Publishing builds
+        # now log in first. Both actions are account-level token issuance and
+        # grant nothing else on their own.
+        Sid      = "PullFromEcrPublicAuthenticated"
+        Effect   = "Allow"
+        Action   = ["ecr-public:GetAuthorizationToken", "sts:GetServiceBearerToken"]
+        Resource = "*"
+      },
+      {
         # Everything else is scoped to these two repositories by ARN. A role
         # that can push anywhere in the account is a role that can overwrite
         # something you did not mean to.

@@ -21,6 +21,17 @@ variable "retained_images" {
   }
 }
 
+variable "retained_releases" {
+  description = "Release images to keep, matched by a semver tag such as `0.2.0`. Environments run these, so they must outlive ordinary builds."
+  type        = number
+  default     = 20
+
+  validation {
+    condition     = var.retained_releases >= 1 && floor(var.retained_releases) == var.retained_releases
+    error_message = "retained_releases must be a whole number of at least 1."
+  }
+}
+
 variable "untagged_expiry_days" {
   description = "Days before an untagged image expires. Untagged images are layers left behind by a retag, and nothing pulls them."
   type        = number
