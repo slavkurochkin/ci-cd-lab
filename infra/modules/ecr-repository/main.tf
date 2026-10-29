@@ -41,7 +41,22 @@ resource "aws_ecr_lifecycle_policy" "this" {
         action = { type = "expire" }
       },
       {
+        # Capstone B. Environments run release images by digest, and a
+        # release must outlive ten more merges to main. Matching the semver
+        # tag puts releases under this rule, so the next one never counts
+        # them.
         rulePriority = 2
+        description  = "Keep the ${var.retained_releases} most recent releases"
+        selection = {
+          tagStatus      = "tagged"
+          tagPatternList = ["*.*.*"]
+          countType      = "imageCountMoreThan"
+          countNumber    = var.retained_releases
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 3
         description  = "Keep the ${var.retained_images} most recent tagged images"
         selection = {
           tagStatus   = "any"

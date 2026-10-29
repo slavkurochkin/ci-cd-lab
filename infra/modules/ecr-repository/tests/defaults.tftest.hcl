@@ -23,12 +23,12 @@ run "tags_are_immutable_by_default" {
   }
 }
 
-run "lifecycle_expires_untagged_first_then_keeps_ten" {
+run "lifecycle_expires_untagged_first_keeps_releases_then_keeps_ten" {
   command = plan
 
   assert {
-    condition     = length(jsondecode(aws_ecr_lifecycle_policy.this.policy).rules) == 2
-    error_message = "Expected exactly two lifecycle rules."
+    condition     = length(jsondecode(aws_ecr_lifecycle_policy.this.policy).rules) == 3
+    error_message = "Expected three lifecycle rules: untagged, releases, everything else."
   }
 
   assert {
@@ -37,7 +37,17 @@ run "lifecycle_expires_untagged_first_then_keeps_ten" {
   }
 
   assert {
-    condition     = jsondecode(aws_ecr_lifecycle_policy.this.policy).rules[1].selection.countNumber == 10
+    condition     = jsondecode(aws_ecr_lifecycle_policy.this.policy).rules[1].selection.tagPatternList == ["*.*.*"]
+    error_message = "Rule 2 must keep releases, before the general rule can count them."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecr_lifecycle_policy.this.policy).rules[1].selection.countNumber == 20
+    error_message = "retained_releases should default to 20."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecr_lifecycle_policy.this.policy).rules[2].selection.countNumber == 10
     error_message = "retained_images should default to 10."
   }
 }

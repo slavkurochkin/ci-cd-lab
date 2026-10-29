@@ -57,7 +57,7 @@ run "adding_a_service_is_one_line" {
   }
 
   assert {
-    condition     = length(jsondecode(aws_iam_role_policy.ci_ecr_push.policy).Statement[1].Resource) == 3
+    condition     = length([for st in jsondecode(aws_iam_role_policy.ci_ecr_push.policy).Statement : st.Resource if st.Sid == "PushToLabRepositories"][0]) == 3
     error_message = "CI push access should cover the new repository without editing ci.tf."
   }
 }
