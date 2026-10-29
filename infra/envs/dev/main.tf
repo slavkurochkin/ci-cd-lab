@@ -12,3 +12,17 @@ module "data_bucket" {
   # yesterday".
   noncurrent_days = 7
 }
+
+# DEMO -- Project 9. Must never merge: this PR exists to be blocked by policy.
+resource "aws_s3_bucket" "shared" {
+  bucket = "ci-cd-lab-dev-shared-${data.aws_caller_identity.current.account_id}"
+}
+
+resource "aws_s3_bucket_public_access_block" "shared" {
+  bucket = aws_s3_bucket.shared.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = true
+  restrict_public_buckets = false
+}
