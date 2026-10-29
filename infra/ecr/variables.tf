@@ -12,9 +12,10 @@ variable "services" {
   DESC
   type = map(object({
     retained_images = optional(number)
+    lambda_pull     = optional(bool, false)
   }))
   default = {
-    api    = {}
+    api    = { lambda_pull = true }
     worker = {}
   }
 }

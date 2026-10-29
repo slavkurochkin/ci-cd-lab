@@ -60,3 +60,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "lambda_pull_source_arns" {
+  description = "Lambda function ARNs (wildcards allowed) that may pull from this repository. Empty: no repository policy."
+  type        = list(string)
+  default     = []
+}

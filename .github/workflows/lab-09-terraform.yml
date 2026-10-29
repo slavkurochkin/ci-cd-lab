@@ -14,10 +14,16 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Cancel a superseded PR run. Never cancel on main: a cancelled apply leaves
-# state locked and half-written.
+# Pull requests: a new push cancels the previous run's plan.
+#
+# main: no run-level group. It used to be `terraform-refs/heads/main`, which
+# meant a prod apply waiting for approval held every later run in the queue,
+# so dev and staging could not apply until someone approved prod. Each apply
+# job has its own per-environment group instead (below), which is the thing
+# that must never run twice at once. Runs on main get a unique group and so
+# are never cancelled: a cancelled apply leaves state locked and half-written.
 concurrency:
-  group: terraform-${{ github.ref }}
+  group: terraform-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -216,6 +222,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 .github/scripts/plan-summary.py "$ENV_NAME" out/plan.txt out/policy.txt > out/summary.md
+          # The summary becomes a PR comment on a public repository. The
+          # account ID is kept out of every committed file; it should not
+          # arrive through a comment instead.
+          account=$(aws sts get-caller-identity --query Account --output text)
+          sed -i "s/${account}/<account-id>/g" out/summary.md
           cat out/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       # Text only on pull requests: it feeds the PR comment. The binary plan is

@@ -68,3 +68,26 @@ resource "aws_ecr_lifecycle_policy" "this" {
     ]
   })
 }
+
+# Capstone B. Lambda pulls an image as the Lambda service, not as whoever
+# created the function, so the repository has to allow it. Without this,
+# CreateFunction fails with "Lambda does not have permission to access the ECR
+# image" -- even when the caller can read the image itself. aws:SourceArn
+# limits it to the functions named here.
+resource "aws_ecr_repository_policy" "lambda_pull" {
+  count      = length(var.lambda_pull_source_arns) > 0 ? 1 : 0
+  repository = aws_ecr_repository.this.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "LambdaPull"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
+      Condition = {
+        StringLike = { "aws:sourceArn" = var.lambda_pull_source_arns }
+      }
+    }]
+  })
+}
