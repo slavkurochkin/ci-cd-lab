@@ -1,0 +1,142 @@
+# Project 9 -- nightly drift detection for infra/envs.
+#
+# Plans each environment with the read-only role. A plan that is not empty
+# means AWS no longer matches main: someone changed something by hand, or an
+# apply failed halfway. This opens an issue instead of fixing it, because the
+# right fix might be to change the code rather than undo the change.
+name: Terraform drift
+
+on:
+  schedule:
+    # 06:17 UTC. Off the hour, because on-the-hour schedules are the ones
+    # GitHub delays most when load is high.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+# A manual run and the nightly run do not need to overlap.
+concurrency:
+  group: terraform-drift
+  cancel-in-progress: false
+
+permissions:
+  contents: read # nothing here writes to the repository
+
+env:
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+  TF_VERSION: "1.16.1"
+
+jobs:
+  detect:
+    name: detect (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, prod]
+    permissions:
+      contents: read # check out the code
+      id-token: write # request an OIDC token to assume an AWS role
+    env:
+      DIR: infra/envs/${{ matrix.env }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      # A scheduled run's OIDC subject is ref:refs/heads/main, which the plan
+      # role's trust policy accepts.
+      - name: Assume the read-only plan role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_TF_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: terraform init
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform -chdir="$DIR" init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: terraform plan
+        run: |
+          set -uo pipefail
+          mkdir -p out
+          terraform -chdir="$DIR" plan -lock-timeout=120s -detailed-exitcode -no-color > out/plan.txt
+          code=$?
+          cat out/plan.txt
+          case "$code" in
+            0) echo false > out/drift ;;
+            2) echo true > out/drift ;;
+            *) echo "::error::plan failed with exit code $code"; exit "$code" ;;
+          esac
+
+      - name: Upload result
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: drift-${{ matrix.env }}
+          path: out/
+          retention-days: 7
+
+  report:
+    name: report
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out the code
+      issues: write # open, comment on and close drift issues
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: drift-*
+          path: results
+
+      - name: Open, update or close an issue per environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          for env in dev prod; do
+            title="Drift detected in infra/envs/$env"
+            existing=$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
+                         --jq ".[] | select(.title == \"$title\") | .number" | head -1)
+
+            if [ "$(cat "results/drift-$env/drift")" = true ]; then
+              {
+                echo "The nightly plan of \`infra/envs/$env\` is not empty: AWS no longer matches \`main\`."
+                echo
+                echo "Decide which side is right. To keep the change, update the code and merge it. To undo it, re-run the Terraform workflow on \`main\`."
+                echo
+                echo "Run: $RUN_URL"
+                echo
+                echo '```'
+                grep -E '^\s+# |^Plan:|has changed' "results/drift-$env/plan.txt" || true
+                echo '```'
+              } > body.md
+              if [ -n "$existing" ]; then
+                # One issue per environment, updated nightly, rather than a new
+                # issue every morning that nobody reads after the third.
+                gh issue comment "$existing" --body-file body.md
+                echo "$env: drift, updated #$existing"
+              else
+                gh issue create --title "$title" --body-file body.md
+                echo "$env: drift, opened an issue"
+              fi
+            elif [ -n "$existing" ]; then
+              gh issue close "$existing" --comment "The nightly plan is empty again. Run: $RUN_URL"
+              echo "$env: clean, closed #$existing"
+            else
+              echo "$env: clean"
+            fi
+          done

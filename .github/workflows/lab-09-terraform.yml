@@ -1,0 +1,422 @@
+# Project 9 -- Terraform in CI.
+#
+# Pull request: check, plan both environments, run the policies, comment.
+# Merge to main: plan again, apply dev, then wait for a person to approve prod.
+#
+# CI manages infra/envs/* only. See infra/ci-oidc/terraform-roles.tf for why,
+# and for the three roles this uses.
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel a superseded PR run. Never cancel on main: a cancelled apply leaves
+# state locked and half-written.
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read # nothing here writes to the repository
+
+env:
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+  TF_VERSION: "1.16.1"
+  TFLINT_VERSION: "v0.64.0"
+  CHECKOV_VERSION: "3.3.10"
+  CONFTEST_VERSION: "0.71.1"
+  CONFTEST_SHA256: "c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985"
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect Terraform changes
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            terraform:
+              - 'infra/envs/**'
+              - 'infra/modules/**'
+              - 'infra/ecr/**'
+              - 'infra/.tflint.hcl'
+              - 'policy/**'
+              - '.github/workflows/lab-09-terraform.yml'
+
+  # Everything that needs no AWS credentials. Fast, and the same on a fork.
+  static:
+    name: static
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          # The wrapper rewrites exit codes and output. -detailed-exitcode and
+          # `terraform show -json > file` both need the real thing.
+          terraform_wrapper: false
+
+      - name: Set up tflint
+        uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Install conftest
+        run: .github/scripts/install-conftest.sh
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff infra
+
+      - name: terraform validate
+        run: |
+          set -euo pipefail
+          for dir in infra/envs/dev infra/envs/prod infra/modules/s3-bucket infra/modules/ecr-repository; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false >/dev/null
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+
+      - name: tflint
+        run: |
+          set -euo pipefail
+          for dir in infra/envs/dev infra/envs/prod infra/modules/s3-bucket infra/modules/ecr-repository infra/ecr; do
+            tflint --chdir="$dir" --config="$PWD/infra/.tflint.hcl"
+          done
+
+      - name: checkov
+        run: >-
+          uvx "checkov==${CHECKOV_VERSION}"
+          --directory infra/envs --directory infra/modules
+          --framework terraform --compact --quiet
+
+      - name: Module tests (offline, mocked provider)
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/modules/ecr-repository test
+          terraform -chdir=infra/ecr init -backend=false >/dev/null
+          terraform -chdir=infra/ecr test
+
+      - name: Policy tests
+        run: conftest verify --policy policy/terraform
+
+  plan:
+    name: plan (${{ matrix.env }})
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, prod]
+    permissions:
+      contents: read # check out the code
+      id-token: write # request an OIDC token to assume an AWS role
+    env:
+      DIR: infra/envs/${{ matrix.env }}
+      ENV_NAME: ${{ matrix.env }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Install conftest
+        run: .github/scripts/install-conftest.sh
+
+      - name: Assume the read-only plan role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_TF_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: terraform init
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform -chdir="$DIR" init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: terraform plan
+        run: |
+          set -uo pipefail
+          # 0 = no changes, 2 = changes, anything else = error.
+          terraform -chdir="$DIR" plan -lock-timeout=120s -detailed-exitcode -out=tfplan
+          code=$?
+          [ "$code" -eq 0 ] || [ "$code" -eq 2 ] || exit "$code"
+          set -e
+          mkdir -p out
+          [ "$code" -eq 2 ] && echo true > out/changes || echo false > out/changes
+          terraform -chdir="$DIR" show -no-color tfplan > out/plan.txt
+          terraform -chdir="$DIR" show -json tfplan > out/plan.json
+
+      - name: Policy check
+        id: policy
+        run: |
+          set -uo pipefail
+          namespaces=(--namespace terraform)
+          [ "$ENV_NAME" = prod ] && namespaces+=(--namespace terraform.prod)
+          conftest test out/plan.json --policy policy/terraform "${namespaces[@]}" --no-color > out/policy.txt 2>&1
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          cat out/policy.txt
+
+      - name: Summarise
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/plan-summary.py "$ENV_NAME" out/plan.txt out/policy.txt > out/summary.md
+          cat out/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Text only on pull requests: it feeds the PR comment. The binary plan is
+      # uploaded only on main, where the apply job consumes it.
+      - name: Upload plan text
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plan-text-${{ matrix.env }}
+          path: |
+            out/summary.md
+            out/changes
+          retention-days: 3
+
+      - name: Upload plan file for apply
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tfplan-${{ matrix.env }}
+          path: ${{ env.DIR }}/tfplan
+          # A saved plan holds every attribute it touches, in plain text, and
+          # this repository is public. Keep it no longer than the apply needs.
+          retention-days: 1
+
+      - name: Fail on policy violations
+        if: steps.policy.outputs.status != '0'
+        run: |
+          echo "::error::Policy check failed for ${ENV_NAME}. See the job summary or the PR comment."
+          exit 1
+
+  comment:
+    name: comment
+    needs: plan
+    if: >-
+      always() && github.event_name == 'pull_request'
+      && needs.plan.result != 'skipped' && needs.plan.result != 'cancelled'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out the code
+      pull-requests: write # create and edit the plan comment
+    steps:
+      - name: Download plan summaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: plan-text-*
+          path: plans
+
+      - name: Create or update the plan comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          marker='<!-- terraform-plan -->'
+          {
+            echo "$marker"
+            echo "## Terraform plan"
+            for f in plans/plan-text-dev/summary.md plans/plan-text-prod/summary.md; do
+              [ -f "$f" ] && cat "$f" && echo
+            done
+          } > body.md
+          # One comment per PR, edited on every push, rather than a new comment
+          # per push burying the conversation.
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                 --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | tail -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@body.md >/dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@body.md >/dev/null
+          fi
+
+  # The required check. Same reason as ci-passed in Lab 02: a skipped job
+  # reports nothing, and a required check that reports nothing blocks forever.
+  terraform-passed:
+    name: terraform-passed
+    needs: [changes, static, plan]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Decide
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::a Terraform job finished with '$r'"; exit 1 ;;
+            esac
+          done
+
+  # Which environments have something to apply. Without this, every merge
+  # touching infra/ would stop at the prod approval, including merges whose
+  # prod plan is empty, and people learn to click approve without reading.
+  gate:
+    name: gate
+    needs: [static, plan]
+    if: github.ref == 'refs/heads/main' && needs.static.result == 'success' && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      dev: ${{ steps.read.outputs.dev }}
+      prod: ${{ steps.read.outputs.prod }}
+    steps:
+      - name: Download plan results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: plan-text-*
+          path: plans
+
+      - name: Read them
+        id: read
+        run: |
+          set -euo pipefail
+          for env in dev prod; do
+            echo "$env=$(cat "plans/plan-text-$env/changes")" | tee -a "$GITHUB_OUTPUT"
+          done
+
+  apply-dev:
+    name: apply (dev)
+    needs: gate
+    if: needs.gate.outputs.dev == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The environment is what makes the apply role assumable: its OIDC subject
+    # is `environment:infra-dev`, and nothing else produces it.
+    environment: infra-dev
+    concurrency:
+      group: terraform-apply-dev
+      cancel-in-progress: false
+    permissions:
+      contents: read # check out the code
+      id-token: write # request an OIDC token to assume an AWS role
+    env:
+      DIR: infra/envs/dev
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Assume the dev apply role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_TF_APPLY_DEV_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: terraform init
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform -chdir="$DIR" init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Download the reviewed plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tfplan-dev
+          path: ${{ env.DIR }}
+
+      # Applies the saved plan, not a fresh one. If state changed since the
+      # plan was made, Terraform refuses with "Saved plan is stale" instead of
+      # applying something nobody reviewed.
+      - name: terraform apply
+        run: terraform -chdir="$DIR" apply -lock-timeout=120s tfplan
+
+  # Dev goes first. Prod runs if dev applied cleanly or had nothing to apply,
+  # and never after a failed dev apply.
+  apply-prod:
+    name: apply (prod)
+    needs: [gate, apply-dev]
+    if: >-
+      always() && needs.gate.result == 'success' && needs.gate.outputs.prod == 'true'
+      && (needs.apply-dev.result == 'success' || needs.apply-dev.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Required reviewer. The job waits here, and the prod apply role cannot be
+    # assumed until someone approves.
+    environment: infra-prod
+    concurrency:
+      group: terraform-apply-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read # check out the code
+      id-token: write # request an OIDC token to assume an AWS role
+    env:
+      DIR: infra/envs/prod
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Assume the prod apply role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_TF_APPLY_PROD_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: terraform init
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform -chdir="$DIR" init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Download the reviewed plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tfplan-prod
+          path: ${{ env.DIR }}
+
+      - name: terraform apply
+        run: terraform -chdir="$DIR" apply -lock-timeout=120s tfplan
