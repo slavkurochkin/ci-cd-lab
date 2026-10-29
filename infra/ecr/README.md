@@ -5,9 +5,11 @@ retained version pair**, and the first 500MB of private storage is free for
 twelve months.
 
 ```bash
-terraform init && terraform apply     # ~10 seconds, 5 resources
+terraform init -backend-config=../backend.hcl && terraform apply     # ~10 seconds, 5 resources
 gh variable set AWS_ECR_REGISTRY --body "$(terraform output -raw registry)"
 ```
+
+State lives in the S3 bucket from `infra/state` (Project 7), and `infra/backend.hcl` names it. If you are working through the curriculum before Project 7, there is no bucket yet: create a gitignored `backend_override.tf` here containing `terraform {` / `backend "local" {}` / `}` on three lines, and delete it when Project 7 moves the state.
 
 Apply `infra/ci-oidc` first. This stack looks that role up by name to attach
 push permissions to it.

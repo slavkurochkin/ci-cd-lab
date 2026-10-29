@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.10"
 
   required_providers {
     aws = {
@@ -8,13 +8,18 @@ terraform {
     }
   }
 
-  # Local state, like the other stacks. Remote state is Project 8's subject.
+  # State lives in S3 since Project 7. Lose it and the next apply fails
+  # with RepositoryAlreadyExistsException, because the repositories are still
+  # there with the images in them.
+  # The bucket name is in ../backend.hcl:
   #
-  # Losing this state file is recoverable but annoying: the repositories still
-  # exist, so a fresh apply fails with RepositoryAlreadyExistsException and the
-  # fix is `terraform import`. Unlike infra/eks there is no sweep script that
-  # can find and delete these without Terraform, because unlike infra/eks they
-  # are not supposed to be deleted.
+  #   terraform init -backend-config=../backend.hcl
+  backend "s3" {
+    key          = "ecr/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {

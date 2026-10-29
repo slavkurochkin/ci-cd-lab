@@ -946,7 +946,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 5 | Building & Publishing Containers | [`labs/05_containers`](labs/05_containers) | Built |
 | A | Capstone — The Golden Pipeline | no lab — worked from this file | **Done** |
 | 6 | Terraform Fundamentals | — | Planned |
-| 7 | State, Drift & Collaboration | — | Planned |
+| 7 | State, Drift & Collaboration | no lab yet — worked from this file, see [`infra/state`](infra/state) | **Done** |
 | 8 | Modules & Composition | — | Planned |
 | 9 | Terraform in CI | — | Planned |
 | B | Capstone — Reproducible Cloud Foundation | — | Planned |

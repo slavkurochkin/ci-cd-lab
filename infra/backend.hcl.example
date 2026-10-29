@@ -1,0 +1,7 @@
+# Copy to backend.hcl (gitignored) and run, in any root that has a backend block:
+#
+#   terraform init -backend-config=../backend.hcl
+#
+# The bucket name contains the account ID, and a backend block cannot read a
+# variable, so it lives here rather than in the .tf files.
+bucket = "ci-cd-lab-tfstate-<account-id>"
