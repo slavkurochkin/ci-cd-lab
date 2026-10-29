@@ -5,10 +5,14 @@ bucket and the budget.
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars   # set budget_email
-terraform init && terraform apply
+terraform init -backend-config=../backend.hcl && terraform apply
 ```
 
+State lives in the S3 bucket from `infra/state` (Project 7), and `infra/backend.hcl` names it. If you are working through the curriculum before Project 7, there is no bucket yet: create a gitignored `backend_override.tf` here containing `terraform {` / `backend "local" {}` / `}` on three lines, and delete it when Project 7 moves the state.
+
 ## The bucket is five resources, not one
+
+Since Project 7 the five resources live in [`../modules/s3-bucket`](../modules/s3-bucket), shared with the state bucket and `infra/envs`. [`moved.tf`](moved.tf) is why that refactor did not destroy and recreate the bucket. [`../state/README.md`](../state/README.md) shows the plan both with and without it.
 
 ```
 aws_s3_bucket

@@ -49,6 +49,7 @@ and the rule for it is different.
 |---|---|---|
 | **ECR repositories** | $0.10/GB/month | Years. The images Track C pulls are stored here. |
 | **IAM role and OIDC provider** | $0 | Years. |
+| **Terraform state bucket** (Project 7) | ~$0: a few dozen KB, plus $0.005 per 1,000 writes | Years. Every long-lived stack's state is in it. Never destroy it. |
 
 ### What ECR actually costs here
 

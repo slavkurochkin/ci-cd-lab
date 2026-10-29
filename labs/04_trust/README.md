@@ -131,10 +131,13 @@ If `infra/ci-oidc` has never been applied:
 ```bash
 cd infra/ci-oidc
 cp terraform.tfvars.example terraform.tfvars   # set github_repo and the two numeric IDs
+printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf   # no state bucket until Project 7
 terraform init && terraform apply
 ```
 
 It costs **$0** and is meant to stay applied.
+
+`versions.tf` declares an S3 backend, because Project 7 moves this state into a bucket. That bucket does not exist yet, so the override file (gitignored) keeps the state on disk until then.
 
 ---
 

@@ -267,9 +267,12 @@ def test_formatting_is_canonical(directory):
 
 @pytest.mark.parametrize("directory", [SANDBOX, ACCOUNT])
 def test_configuration_is_valid(directory):
-    result = _terraform(directory, "validate", "-json")
-    if result.returncode != 0 and "Missing required provider" in result.stdout:
+    # Check the directory, not the error text. Without a lock file Terraform
+    # says "Missing required provider"; with one it says "missing or corrupted
+    # provider plugins". Both mean init has not run.
+    if not (repo_root() / directory / ".terraform").is_dir():
         pytest.skip(f"{directory} is not initialised -- run terraform init")
+    result = _terraform(directory, "validate", "-json")
     payload = json.loads(result.stdout or "{}")
     assert payload.get("valid"), (
         f"`terraform validate` failed in {directory}:\n"

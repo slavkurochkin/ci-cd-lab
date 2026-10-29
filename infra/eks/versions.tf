@@ -8,11 +8,11 @@ terraform {
     }
   }
 
-  # Local state, deliberately. Remote state with locking is Project 8's subject,
-  # and bootstrapping an S3 backend here would mean teaching it twice. The
-  # cluster is recreated from scratch every session anyway, so the blast radius
-  # of a lost state file is one `make eks-down` run against a live account --
-  # which is exactly what scripts/eks-down.sh handles without Terraform's help.
+  # Local state, still, after Project 7 moved the long-lived stacks to S3. The
+  # cluster is recreated from scratch every session, so the blast radius of a
+  # lost state file is one `make eks-down` run against a live account, and
+  # scripts/eks-down.sh handles that without Terraform's help. Project 13 is
+  # where CI applies this stack, and that is when it needs a shared backend.
 }
 
 provider "aws" {
