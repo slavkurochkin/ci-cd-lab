@@ -23,4 +23,7 @@ module "repository" {
 
   name            = "ci-cd-lab/${each.key}"
   retained_images = coalesce(each.value.retained_images, var.retained_images)
+
+  # Capstone B: the api runs on Lambda in every environment.
+  lambda_pull_source_arns = each.value.lambda_pull ? ["arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:ci-cd-lab-*"] : []
 }

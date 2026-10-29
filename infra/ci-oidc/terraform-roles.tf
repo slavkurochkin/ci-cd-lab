@@ -201,7 +201,7 @@ locals {
       {
         Sid       = "NeverProdApi"
         Effect    = "Deny"
-        Action    = ["apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"]
+        Action    = ["apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE", "apigateway:TagResource", "apigateway:UntagResource"]
         Resource  = ["*"]
         Condition = { StringEquals = { "aws:ResourceTag/Environment" = "prod" } }
       },
@@ -333,7 +333,13 @@ resource "aws_iam_role_policy" "tf_apply" {
           # docs/CAPSTONE-B.md for what that leaves open.
           Sid    = "HttpApi"
           Effect = "Allow"
-          Action = ["apigateway:GET", "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"]
+          # Tagging is its own action, not one of the HTTP verbs. The first
+          # dev apply created the API and was then refused TagResource on the
+          # stage.
+          Action = [
+            "apigateway:GET", "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE",
+            "apigateway:TagResource", "apigateway:UntagResource",
+          ]
           Resource = [
             "arn:aws:apigateway:${local.region}::/apis",
             "arn:aws:apigateway:${local.region}::/apis/*",
