@@ -1,8 +1,18 @@
 # The api service on Lambda: one image, one table, one public HTTP endpoint.
 # Capstone B. README.md explains the choices that are not obvious.
 
-data "aws_ecr_repository" "api" {
-  name = var.repository_name
+# The repository URL, built rather than looked up. The aws_ecr_repository data
+# source also lists the repository's images, which needs ecr:DescribeImages;
+# the first CI plan failed on exactly that. Lambda checks the image exists
+# when it creates or updates the function, so nothing is lost.
+data "aws_caller_identity" "current" {}
+
+# `.name`, not `.region`: provider 5.x has only `name`, and this module
+# allows 5.x. 6.x keeps `name` (deprecated) alongside `region`.
+data "aws_region" "current" {}
+
+locals {
+  repository_url = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${var.repository_name}"
 }
 
 # ---------------------------------------------------------------------------
@@ -95,7 +105,7 @@ resource "aws_lambda_function" "api" {
 
   # By digest, never by tag. The plan shows exactly which image will run, and
   # changing it is a one-line diff in terraform.tfvars that gets reviewed.
-  image_uri = "${data.aws_ecr_repository.api.repository_url}@${var.image_digest}"
+  image_uri = "${local.repository_url}@${var.image_digest}"
 
   memory_size = var.memory_size
   timeout     = var.timeout
