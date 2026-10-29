@@ -89,9 +89,14 @@ resource "aws_iam_role_policy" "tf_plan" {
       {
         # plan takes the lock too, so two plans and an apply cannot interleave.
         # The lock is a separate object; writing it cannot change state.
+        #
+        # GetObject as well: releasing the lock reads it back first to check
+        # the lock ID is still ours. The first CI run had only Put and Delete,
+        # took the lock, failed to release it with AccessDenied, and left both
+        # environments locked until `terraform force-unlock`.
         Sid      = "LockEnvState"
         Effect   = "Allow"
-        Action   = ["s3:PutObject", "s3:DeleteObject"]
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
         Resource = ["arn:aws:s3:::${local.state_bucket}/envs/*/terraform.tfstate.tflock"]
       },
       {

@@ -7,6 +7,13 @@
 # generated docs.
 
 resource "aws_s3_bucket" "this" {
+  # checkov findings this module accepts, each on purpose. A skip with a
+  # reason is a decision someone can revisit; a skip in a CI flag is not.
+  #
+  #checkov:skip=CKV_AWS_145:SSE-S3, not KMS. A KMS key is $1/month plus per-request charges, for an audit trail these buckets do not need.
+  #checkov:skip=CKV_AWS_18:No access logging. It needs a second bucket per bucket and grows forever; these hold no data anyone reads.
+  #checkov:skip=CKV_AWS_144:No cross-region replication. It doubles storage cost and these buckets have nothing worth a second region.
+  #checkov:skip=CKV2_AWS_62:No event notifications. Nothing consumes events from these buckets.
   bucket = var.name
 }
 
