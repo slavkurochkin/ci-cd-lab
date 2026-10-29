@@ -27,3 +27,8 @@ output "lambda_boundary_arn" {
   description = "The permissions boundary every role created by CI must carry."
   value       = aws_iam_policy.lambda_boundary.arn
 }
+
+output "public_pull_role_arn" {
+  description = "Set as the AWS_PUBLIC_PULL_ROLE_ARN repository variable."
+  value       = aws_iam_role.public_pull.arn
+}
