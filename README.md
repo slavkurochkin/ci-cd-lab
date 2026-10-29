@@ -75,7 +75,7 @@ Three labs are built; the roadmap describes all eighteen. That gap is intentiona
 | Track | Projects | Runs on | Status |
 |---|---|---|---|
 | A — Automation (GitHub Actions) | 1–5 + Capstone A | GitHub-hosted runners | Labs 01–03 built |
-| B — Infrastructure (Terraform, AWS) | 6–9 + Capstone B | AWS free tier | Lab 06 written, Projects 7–8 done |
+| B — Infrastructure (Terraform, AWS) | 6–9 + Capstone B | AWS free tier | Lab 06 written, Projects 7–9 done |
 | C — Orchestration (Kubernetes) | 10–14 + Capstone C | minikube (10–12), EKS (13–14) | Planned |
 | D — Delivery & Governance | 15–18 | Both | Planned |
 

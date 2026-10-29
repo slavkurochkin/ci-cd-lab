@@ -160,4 +160,12 @@ A skip with a reason next to the resource is a decision someone can review. A `-
 |---|---|
 | A PR adding a public S3 bucket is blocked by policy, not by a reviewer noticing | PR #43: `plan (dev)` failed on 3 policy violations, `static` failed on `checkov`, `terraform-passed` failed, merge state `BLOCKED`. No bucket was created. Closed unmerged. |
 | The plan comment is readable by someone who does not know Terraform | the table above |
-| Manually changing a resource in the console produces an issue by morning | see below, after merge |
+| Manually changing a resource in the console produces an issue by morning | a tag added to the dev bucket from the CLI: the drift run opened #44 for dev and left prod alone. A manual run of the Terraform workflow on `main` reverted it, and the next drift run closed #44 with "The nightly plan is empty again". The run was started by hand instead of waiting for 06:17 UTC. |
+
+## The first applies from CI
+
+The merge of #42 applied a `Repository` tag to both environments. `apply (dev)` ran on its own. `apply (prod)` stopped at `waiting` until a person approved the `infra-prod` deployment, and only then could it assume the prod role. Both left no lock behind.
+
+The drift fix above ran the workflow again by hand. Dev's plan had the change, so it applied. Prod's plan was empty, so `gate` skipped `apply (prod)` and nobody was asked to approve anything.
+
+The first drift issue said *that* the dev bucket changed but not *what*: the filter kept the `# ... will be updated` line and dropped the attribute lines below it. It now keeps those too.

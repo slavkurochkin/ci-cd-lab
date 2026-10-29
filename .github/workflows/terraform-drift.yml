@@ -123,7 +123,10 @@ jobs:
                 echo "Run: $RUN_URL"
                 echo
                 echo '```'
-                grep -E '^\s+# |^Plan:|has changed' "results/drift-$env/plan.txt" || true
+                # The resource lines and the attribute lines that differ. The
+                # first version kept only the resource lines, and the issue
+                # said a bucket changed without saying what.
+                grep -E '^\s+# [^(]|^\s+[-+~] |^Plan:' "results/drift-$env/plan.txt" | head -60 || true
                 echo '```'
               } > body.md
               if [ -n "$existing" ]; then
