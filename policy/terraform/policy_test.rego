@@ -108,3 +108,14 @@ test_prod_bucket_update_is_allowed if {
 	updated := change("aws_s3_bucket.this", "aws_s3_bucket", ["update"], {"tags_all": good_tags})
 	count(prod.deny) == 0 with input as {"resource_changes": [updated]}
 }
+
+test_read_on_star_resource_is_allowed if {
+	p := role_policy({"Effect": "Allow", "Action": "logs:DescribeLogGroups", "Resource": "*"})
+	count(terraform.deny) == 0 with input as {"resource_changes": [p]}
+}
+
+test_prod_table_replace_is_denied if {
+	replaced := change("aws_dynamodb_table.orders", "aws_dynamodb_table", ["delete", "create"], {"tags_all": good_tags})
+	some msg in prod.deny with input as {"resource_changes": [replaced]}
+	contains(msg, "deletes prod data")
+}

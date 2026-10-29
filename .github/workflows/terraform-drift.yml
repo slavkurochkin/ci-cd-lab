@@ -27,14 +27,35 @@ env:
   TF_VERSION: "1.16.1"
 
 jobs:
+  envs:
+    name: envs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      all: ${{ steps.list.outputs.all }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: List environments
+        id: list
+        run: |
+          set -euo pipefail
+          all=$(find infra/envs -mindepth 2 -maxdepth 2 -name versions.tf -printf '%h\n' \
+                | xargs -n1 basename | sort | jq -R . | jq -cs .)
+          echo "all=$all" | tee -a "$GITHUB_OUTPUT"
+
   detect:
     name: detect (${{ matrix.env }})
+    needs: envs
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        env: [dev, prod]
+        env: ${{ fromJSON(needs.envs.outputs.all) }}
     permissions:
       contents: read # check out the code
       id-token: write # request an OIDC token to assume an AWS role
@@ -109,7 +130,8 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          for env in dev prod; do
+          for dir in results/drift-*; do
+            env=${dir#results/drift-}
             title="Drift detected in infra/envs/$env"
             existing=$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
                          --jq ".[] | select(.title == \"$title\") | .number" | head -1)
