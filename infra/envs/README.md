@@ -4,6 +4,8 @@ Two environments, `dev/` and `prod/`, built from the same module (`../modules/s3
 
 **One directory per environment, each with its own backend key.** The directory you are in is the environment you are changing, and the state for the other one cannot be read, locked or written from here.
 
+**Since Project 9, CI applies both environments.** A pull request plans them and runs the policy checks; a merge applies dev, then waits for approval on prod. See [`docs/TERRAFORM-CI.md`](../../docs/TERRAFORM-CI.md). Locally you can still plan:
+
 ```bash
 cd dev
 terraform init -backend-config=../../backend.hcl

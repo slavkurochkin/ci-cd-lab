@@ -4,6 +4,7 @@
 # setting is the default live in README.md, above the generated reference.
 
 resource "aws_ecr_repository" "this" {
+  #checkov:skip=CKV_AWS_136:AES256, not KMS. Images here are public on GHCR already; a KMS key would cost more than the registry.
   name                 = var.name
   image_tag_mutability = var.immutable_tags ? "IMMUTABLE" : "MUTABLE"
 

@@ -27,6 +27,9 @@ provider "aws" {
       Lab         = "07"
       Environment = "prod"
       ManagedBy   = "terraform"
+      # Since Project 9, CI applies this environment. The tag says where to
+      # look for the code and the run that last changed it.
+      Repository = "slavkurochkin/ci-cd-lab"
     }
   }
 }

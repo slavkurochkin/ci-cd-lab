@@ -105,3 +105,13 @@ terraform import aws_iam_role.ci ci-cd-lab-ci
 ```
 
 That asymmetry is the concrete argument for remote state. Since Project 7 this stack's state lives in S3 (`ci-oidc/terraform.tfstate` in the state bucket), not on one laptop.
+
+## Roles for Terraform in CI (Project 9)
+
+`terraform-roles.tf` adds three more roles: a read-only plan role that pull requests can assume, and one apply role per environment, assumable only from the `infra-dev` or `infra-prod` GitHub environment. [`docs/TERRAFORM-CI.md`](../../docs/TERRAFORM-CI.md) explains each trust policy and what each role can and cannot do.
+
+```bash
+gh variable set AWS_TF_PLAN_ROLE_ARN       --body "$(terraform output -raw tf_plan_role_arn)"
+gh variable set AWS_TF_APPLY_DEV_ROLE_ARN  --body "$(terraform output -json tf_apply_role_arns | jq -r .dev)"
+gh variable set AWS_TF_APPLY_PROD_ROLE_ARN --body "$(terraform output -json tf_apply_role_arns | jq -r .prod)"
+```

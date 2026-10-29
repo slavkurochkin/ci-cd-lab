@@ -53,6 +53,7 @@ check aws       "Track B, C (13)" "awscli"                     optional
 check tflint    "Track B  (8-9)"  "terraform-linters/tap/tflint" optional
 check terraform-docs "Track B  (8)" "terraform-docs"           optional
 check checkov   "Track B  (9)"    "checkov"                    optional
+check conftest  "Track B  (9)"    "conftest"                   optional
 check kubectl   "Track C (10-14)" "kubernetes-cli"             optional
 check minikube  "Track C (10-12)" "minikube"                   optional
 check doppler   "Track C (11)"    "dopplerhq/cli/doppler"      optional
