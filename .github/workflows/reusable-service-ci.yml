@@ -318,11 +318,18 @@ jobs:
           # No {{major}}.{{minor}} tag either. A floating tag exists to be
           # moved, and an immutable repository refuses to move it, so every
           # second patch release on a minor line failed: v0.2.1 pushed 0.2.1,
-          # then failed on 0.2. A tag here names one image forever.
+          # then failed on 0.2. A tag here names one image forever. See also
+          # `flavor` below.
           tags: |
             type=sha,format=long,enable=${{ github.ref_type != 'tag' }}
             type=semver,pattern={{version}}
             type=ref,event=pr
+          # metadata-action adds `latest` to every semver release by default.
+          # `latest` exists to move, so in an immutable repository it works
+          # once: v0.2.1 created it and v0.2.2 failed on it. With this, a
+          # release pushes exactly one tag, the version.
+          flavor: |
+            latest=false
 
       # Built and loaded locally first, so the scan below has something to
       # inspect that has not been published yet.
