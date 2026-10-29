@@ -948,7 +948,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 6 | Terraform Fundamentals | [`labs/06_terraform`](labs/06_terraform) | Built |
 | 7 | State, Drift & Collaboration | no lab yet — worked from this file, see [`infra/state`](infra/state) | **Done** |
 | 8 | Modules & Composition | no lab yet — worked from this file, see [`infra/modules/ecr-repository`](infra/modules/ecr-repository) | **Done** |
-| 9 | Terraform in CI | — | Planned |
+| 9 | Terraform in CI | no lab yet — worked from this file, see [`docs/TERRAFORM-CI.md`](docs/TERRAFORM-CI.md) | **Done** |
 | B | Capstone — Reproducible Cloud Foundation | — | Planned |
 | 10 | Kubernetes Fundamentals | — | Planned |
 | 11 | Configuration & Packaging | — | Planned |
