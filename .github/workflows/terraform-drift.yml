@@ -94,6 +94,10 @@ jobs:
           mkdir -p out
           terraform -chdir="$DIR" plan -lock-timeout=120s -detailed-exitcode -no-color > out/plan.txt
           code=$?
+          # The plan text becomes a public issue. Redact the account ID, as
+          # the plan comment does.
+          account=$(aws sts get-caller-identity --query Account --output text)
+          sed -i "s/${account}/<account-id>/g" out/plan.txt
           cat out/plan.txt
           case "$code" in
             0) echo false > out/drift ;;
