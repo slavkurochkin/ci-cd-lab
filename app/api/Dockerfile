@@ -48,6 +48,19 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# AWS Lambda Web Adapter (Capstone B). A Lambda extension: inside Lambda it
+# turns invocations into HTTP requests to uvicorn on port 8000, so this image
+# runs on Lambda with no handler code. Anywhere else it is a file nobody runs,
+# and the image behaves as before -- which is what lets Track C run the same
+# image on Kubernetes. Pinned by digest, like everything else this image pulls.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0@sha256:17cfd08eff1dfea3f6a9a1e9c65fdac80aa4919b6085e746615530f43f57d2f1 \
+     /lambda-adapter /opt/extensions/lambda-adapter
+
+# The adapter forwards to this port, and only once this path answers. The
+# default path is "/", which this app does not serve.
+ENV AWS_LWA_PORT=8000 \
+    AWS_LWA_READINESS_CHECK_PATH=/healthz
+
 # Stamped by the pipeline; /version reports it back so you can prove what is running.
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
