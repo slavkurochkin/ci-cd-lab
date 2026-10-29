@@ -1,9 +1,15 @@
 # Offline tests: mocked provider, no AWS.
 
 mock_provider "aws" {
-  mock_data "aws_ecr_repository" {
+  mock_data "aws_caller_identity" {
     defaults = {
-      repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/ci-cd-lab/api"
+      account_id = "123456789012"
+    }
+  }
+
+  mock_data "aws_region" {
+    defaults = {
+      name = "us-east-1"
     }
   }
 }
