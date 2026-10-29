@@ -4,6 +4,6 @@
 # shown so you can see what you are getting without reading variables.tf.
 
 # region          = "us-east-1"     # must match where EKS runs
-# services        = ["api", "worker"]
+# services        = { api = {}, worker = {} }
 # retained_images = 10              # the only thing bounding the storage bill
 # ci_role_name    = "ci-cd-lab-ci"  # created by infra/ci-oidc, not here

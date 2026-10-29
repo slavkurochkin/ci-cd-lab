@@ -12,7 +12,3 @@ module "data_bucket" {
   # yesterday".
   noncurrent_days = 7
 }
-
-output "bucket" {
-  value = module.data_bucket.id
-}

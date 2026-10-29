@@ -5,7 +5,7 @@ output "registry" {
 
 output "repository_urls" {
   description = "Full image names, by service."
-  value       = { for k, r in aws_ecr_repository.service : k => r.repository_url }
+  value       = { for k, r in module.repository : k => r.repository_url }
 }
 
 output "retained_images" {

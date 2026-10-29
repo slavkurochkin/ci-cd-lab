@@ -4,5 +4,6 @@ output "id" {
 }
 
 output "arn" {
-  value = aws_s3_bucket.this.arn
+  description = "For IAM policies and bucket policies."
+  value       = aws_s3_bucket.this.arn
 }
