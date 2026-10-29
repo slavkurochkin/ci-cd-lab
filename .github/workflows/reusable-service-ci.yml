@@ -301,10 +301,14 @@ jobs:
           # No sha- tag on a release build. main has usually pushed that tag
           # already for the same commit, and the repositories are immutable:
           # the v0.2.0 release failed on exactly that, after pushing 0.2.0.
+          #
+          # No {{major}}.{{minor}} tag either. A floating tag exists to be
+          # moved, and an immutable repository refuses to move it, so every
+          # second patch release on a minor line failed: v0.2.1 pushed 0.2.1,
+          # then failed on 0.2. A tag here names one image forever.
           tags: |
             type=sha,format=long,enable=${{ github.ref_type != 'tag' }}
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=ref,event=pr
 
       # Built and loaded locally first, so the scan below has something to
