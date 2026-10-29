@@ -67,7 +67,9 @@ jobs:
 
       - name: terraform plan
         run: |
-          set -uo pipefail
+          # Off, because GitHub's default `bash -e` ends the step on exit code
+          # 2, which is the drift this job exists to report.
+          set +e -uo pipefail
           mkdir -p out
           terraform -chdir="$DIR" plan -lock-timeout=120s -detailed-exitcode -no-color > out/plan.txt
           code=$?

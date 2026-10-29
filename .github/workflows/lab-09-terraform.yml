@@ -170,7 +170,10 @@ jobs:
 
       - name: terraform plan
         run: |
-          set -uo pipefail
+          # GitHub runs this with `bash -e`, which would end the step on exit
+          # code 2 before it could be read. 2 means "there are changes", not
+          # failure, so -e is off until the code is checked.
+          set +e -uo pipefail
           # 0 = no changes, 2 = changes, anything else = error.
           terraform -chdir="$DIR" plan -lock-timeout=120s -detailed-exitcode -out=tfplan
           code=$?
@@ -184,7 +187,7 @@ jobs:
       - name: Policy check
         id: policy
         run: |
-          set -uo pipefail
+          set +e -uo pipefail
           namespaces=(--namespace terraform)
           [ "$ENV_NAME" = prod ] && namespaces+=(--namespace terraform.prod)
           conftest test out/plan.json --policy policy/terraform "${namespaces[@]}" --no-color > out/policy.txt 2>&1
