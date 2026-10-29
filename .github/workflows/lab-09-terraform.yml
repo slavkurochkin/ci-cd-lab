@@ -222,6 +222,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 .github/scripts/plan-summary.py "$ENV_NAME" out/plan.txt out/policy.txt > out/summary.md
+          # The summary becomes a PR comment on a public repository. The
+          # account ID is kept out of every committed file; it should not
+          # arrive through a comment instead.
+          account=$(aws sts get-caller-identity --query Account --output text)
+          sed -i "s/${account}/<account-id>/g" out/summary.md
           cat out/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       # Text only on pull requests: it feeds the PR comment. The binary plan is
