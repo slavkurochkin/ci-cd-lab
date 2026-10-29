@@ -58,11 +58,13 @@ Docker Desktop is needed from Project 5 onward. Install it before then and leave
 
 ## Later — Track B (Projects 6–9)
 
-**Tools:** `terraform`, `awscli`, `tflint`, `terraform-docs`, `checkov`.
+**Tools:** `terraform`, `awscli`, `tflint`, `terraform-docs`, `checkov`, `conftest`.
 
 ```bash
-brew install hashicorp/tap/terraform terraform-linters/tap/tflint terraform-docs awscli checkov
+brew install hashicorp/tap/terraform terraform-linters/tap/tflint terraform-docs awscli checkov conftest
 ```
+
+To see the `checkov` findings CI sees, run it the way CI does: `uvx checkov==3.3.10 --directory infra/envs --directory infra/modules --framework terraform`. The Homebrew install of the same version reported fewer checks here. See `docs/TERRAFORM-CI.md`.
 
 ### An AWS account
 
