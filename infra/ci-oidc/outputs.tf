@@ -19,6 +19,11 @@ output "tf_plan_role_arn" {
 }
 
 output "tf_apply_role_arns" {
-  description = "Project 9. One per environment: AWS_TF_APPLY_DEV_ROLE_ARN and AWS_TF_APPLY_PROD_ROLE_ARN."
-  value       = { for env, r in aws_iam_role.tf_apply : env => r.arn }
+  description = "One per tier: AWS_TF_APPLY_NONPROD_ROLE_ARN and AWS_TF_APPLY_PROD_ROLE_ARN."
+  value       = { for tier, r in aws_iam_role.tf_apply : tier => r.arn }
+}
+
+output "lambda_boundary_arn" {
+  description = "The permissions boundary every role created by CI must carry."
+  value       = aws_iam_policy.lambda_boundary.arn
 }

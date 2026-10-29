@@ -39,6 +39,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       terraform: ${{ steps.filter.outputs.terraform }}
+      envs: ${{ steps.envs.outputs.all }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -57,6 +58,17 @@ jobs:
               - 'infra/.tflint.hcl'
               - 'policy/**'
               - '.github/workflows/lab-09-terraform.yml'
+
+      # Capstone B: environments are found, not listed. Every directory under
+      # infra/envs with a versions.tf is one, so adding staging is adding a
+      # directory, and nothing here changes.
+      - name: List environments
+        id: envs
+        run: |
+          set -euo pipefail
+          all=$(find infra/envs -mindepth 2 -maxdepth 2 -name versions.tf -printf '%h\n' \
+                | xargs -n1 basename | sort | jq -R . | jq -cs .)
+          echo "all=$all" | tee -a "$GITHUB_OUTPUT"
 
   # Everything that needs no AWS credentials. Fast, and the same on a fork.
   static:
@@ -96,7 +108,7 @@ jobs:
       - name: terraform validate
         run: |
           set -euo pipefail
-          for dir in infra/envs/dev infra/envs/prod infra/modules/s3-bucket infra/modules/ecr-repository; do
+          for dir in infra/envs/*/ infra/modules/*/; do
             echo "::group::$dir"
             terraform -chdir="$dir" init -backend=false >/dev/null
             terraform -chdir="$dir" validate
@@ -106,7 +118,7 @@ jobs:
       - name: tflint
         run: |
           set -euo pipefail
-          for dir in infra/envs/dev infra/envs/prod infra/modules/s3-bucket infra/modules/ecr-repository infra/ecr; do
+          for dir in infra/envs/*/ infra/modules/*/ infra/ecr; do
             tflint --chdir="$dir" --config="$PWD/infra/.tflint.hcl"
           done
 
@@ -119,9 +131,15 @@ jobs:
       - name: Module tests (offline, mocked provider)
         run: |
           set -euo pipefail
-          terraform -chdir=infra/modules/ecr-repository test
-          terraform -chdir=infra/ecr init -backend=false >/dev/null
-          terraform -chdir=infra/ecr test
+          # Every module with a tests/ directory, so a new module's tests run
+          # without anyone remembering to add them here.
+          for dir in infra/modules/*/ infra/ecr/; do
+            [ -d "$dir/tests" ] || continue
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false >/dev/null
+            terraform -chdir="$dir" test
+            echo "::endgroup::"
+          done
 
       - name: Policy tests
         run: conftest verify --policy policy/terraform
@@ -135,7 +153,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [dev, prod]
+        env: ${{ fromJSON(needs.changes.outputs.envs) }}
     permissions:
       contents: read # check out the code
       id-token: write # request an OIDC token to assume an AWS role
@@ -257,8 +275,8 @@ jobs:
           {
             echo "$marker"
             echo "## Terraform plan"
-            for f in plans/plan-text-dev/summary.md plans/plan-text-prod/summary.md; do
-              [ -f "$f" ] && cat "$f" && echo
+            for f in plans/plan-text-*/summary.md; do
+              cat "$f" && echo
             done
           } > body.md
           # One comment per PR, edited on every push, rather than a new comment
@@ -302,7 +320,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      dev: ${{ steps.read.outputs.dev }}
+      nonprod: ${{ steps.read.outputs.nonprod }}
       prod: ${{ steps.read.outputs.prod }}
     steps:
       - name: Download plan results
@@ -315,27 +333,42 @@ jobs:
         id: read
         run: |
           set -euo pipefail
-          for env in dev prod; do
-            echo "$env=$(cat "plans/plan-text-$env/changes")" | tee -a "$GITHUB_OUTPUT"
+          nonprod=()
+          prod=false
+          for dir in plans/plan-text-*; do
+            env=${dir#plans/plan-text-}
+            changed=$(cat "$dir/changes")
+            echo "$env: $changed"
+            if [ "$env" = prod ]; then prod=$changed
+            elif [ "$changed" = true ]; then nonprod+=("$env"); fi
           done
+          echo "nonprod=$(printf '%s\n' "${nonprod[@]}" | sed '/^$/d' | jq -R . | jq -cs .)" | tee -a "$GITHUB_OUTPUT"
+          echo "prod=$prod" | tee -a "$GITHUB_OUTPUT"
 
-  apply-dev:
-    name: apply (dev)
+  # Every environment except prod, in parallel, with the nonprod role.
+  apply-nonprod:
+    name: apply (${{ matrix.env }})
     needs: gate
-    if: needs.gate.outputs.dev == 'true'
+    # An empty matrix is an error, not a no-op, so skip it explicitly.
+    if: needs.gate.outputs.nonprod != '[]' && needs.gate.outputs.nonprod != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        env: ${{ fromJSON(needs.gate.outputs.nonprod) }}
     # The environment is what makes the apply role assumable: its OIDC subject
-    # is `environment:infra-dev`, and nothing else produces it.
-    environment: infra-dev
+    # is `environment:infra-<env>`. A new environment is created by GitHub the
+    # first time a job names it, with no protection rules.
+    environment: infra-${{ matrix.env }}
     concurrency:
-      group: terraform-apply-dev
+      group: terraform-apply-${{ matrix.env }}
       cancel-in-progress: false
     permissions:
       contents: read # check out the code
       id-token: write # request an OIDC token to assume an AWS role
     env:
-      DIR: infra/envs/dev
+      DIR: infra/envs/${{ matrix.env }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -348,10 +381,10 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Assume the dev apply role
+      - name: Assume the nonprod apply role
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
-          role-to-assume: ${{ vars.AWS_TF_APPLY_DEV_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_TF_APPLY_NONPROD_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: terraform init
@@ -362,7 +395,7 @@ jobs:
       - name: Download the reviewed plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: tfplan-dev
+          name: tfplan-${{ matrix.env }}
           path: ${{ env.DIR }}
 
       # Applies the saved plan, not a fresh one. If state changed since the
@@ -371,14 +404,14 @@ jobs:
       - name: terraform apply
         run: terraform -chdir="$DIR" apply -lock-timeout=120s tfplan
 
-  # Dev goes first. Prod runs if dev applied cleanly or had nothing to apply,
-  # and never after a failed dev apply.
+  # Nonprod goes first. Prod runs if every nonprod apply succeeded or there
+  # was nothing to apply, and never after a failed one.
   apply-prod:
     name: apply (prod)
-    needs: [gate, apply-dev]
+    needs: [gate, apply-nonprod]
     if: >-
       always() && needs.gate.result == 'success' && needs.gate.outputs.prod == 'true'
-      && (needs.apply-dev.result == 'success' || needs.apply-dev.result == 'skipped')
+      && (needs.apply-nonprod.result == 'success' || needs.apply-nonprod.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Required reviewer. The job waits here, and the prod apply role cannot be

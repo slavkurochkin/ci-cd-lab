@@ -33,10 +33,13 @@ deny contains msg if {
 	msg := sprintf("%s: action %q is a wildcard. Name the actions.", [address, action])
 }
 
+read_action(action) if regex.match(`^[a-z0-9-]+:(Get|List|Describe)`, action)
+
 deny contains msg if {
 	some [address, s] in statements
 	"*" in as_array(s.Resource)
 	some action in as_array(s.Action)
 	not action in account_level_actions
+	not read_action(action)
 	msg := sprintf("%s: %q on resource \"*\". Scope it to ARNs.", [address, action])
 }

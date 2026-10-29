@@ -1,4 +1,4 @@
-# Rule 4: prod never deletes a bucket from CI.
+# Rule 4: prod never deletes data from CI: not a bucket, not the orders table.
 #
 # Run only for prod: `conftest test --namespace terraform --namespace
 # terraform.prod`. Deleting a prod bucket is a decision a person makes from a
@@ -8,9 +8,11 @@ package terraform.prod
 
 import rego.v1
 
+data_types := {"aws_s3_bucket", "aws_dynamodb_table"}
+
 deny contains msg if {
 	some r in input.resource_changes
-	r.type == "aws_s3_bucket"
+	r.type in data_types
 	"delete" in r.change.actions
-	msg := sprintf("%s: this plan deletes a prod bucket (%s). Not from CI.", [r.address, concat("/", r.change.actions)])
+	msg := sprintf("%s: this plan deletes prod data (%s). Not from CI.", [r.address, concat("/", r.change.actions)])
 }
