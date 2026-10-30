@@ -949,7 +949,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 7 | State, Drift & Collaboration | no lab yet — worked from this file, see [`infra/state`](infra/state) | **Done** |
 | 8 | Modules & Composition | no lab yet — worked from this file, see [`infra/modules/ecr-repository`](infra/modules/ecr-repository) | **Done** |
 | 9 | Terraform in CI | no lab yet — worked from this file, see [`docs/TERRAFORM-CI.md`](docs/TERRAFORM-CI.md) | **Done** |
-| B | Capstone — Reproducible Cloud Foundation | no lab — see [`docs/CAPSTONE-B.md`](docs/CAPSTONE-B.md) | **Done** (prod apply awaiting approval) |
+| B | Capstone — Reproducible Cloud Foundation | no lab — see [`docs/CAPSTONE-B.md`](docs/CAPSTONE-B.md) | **Done** |
 | 10 | Kubernetes Fundamentals | — | Planned |
 | 11 | Configuration & Packaging | — | Planned |
 | 12 | Rollouts, Failure & Forensics | — | Planned |

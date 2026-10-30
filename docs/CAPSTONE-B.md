@@ -7,9 +7,9 @@ The api service on AWS Lambda, in environments that exist only because Terraform
 | Deliverable | Result |
 |---|---|
 | One PR stands up an environment from nothing | **#53**: six files under `infra/envs/staging/`, four of them identical to dev's. Plan: 15 to add. Applied on merge with no approval; `POST /orders` then `GET /orders/{id}` worked against staging's own table. |
-| One PR destroys it | **#58**: one line, `enabled = false`. Plan: 15 to destroy. Applied on merge. Afterwards no staging function, API, table, role, log group or bucket existed, and `make aws-sweep` printed `Account is clean.` |
+| One PR destroys it | **#58**: one line, `enabled = false`. Plan: 15 to destroy. Applied on merge. Afterwards no staging function, API, table, role, log group or bucket existed, and `make aws-sweep` printed `Account is clean.` A later cleanup PR removed the directory, once its state was confirmed empty (0 resources). |
 | A cost report showing $0.00 | October 2026 to date: **$0.0162** of usage (ECR $0.0144, S3 $0.0019), offset by Free-plan credits; **$0.00 billed**. Cost Explorer lags about a day, so the Lambda, API Gateway and DynamoDB usage from the same day is not in this figure. |
-| Dev and prod run the api | Dev: live since the first apply's re-run. **Prod: planned (10 to add, nothing deleted) and waiting for a person to approve the `infra-prod` deployment.** |
+| Dev and prod run the api | Both live. Dev applied on merge; prod applied after a person approved the `infra-prod` deployment. Each answers `POST /orders` and `GET /orders/{id}` from its own table, and plans `No changes.` |
 | An architecture diagram and a runbook for "the apply failed halfway" | [Architecture](#architecture), and a [runbook](#runbook-the-apply-failed-halfway) written from the dev apply that did fail halfway. |
 
 Contents: [Architecture](#architecture) · [The five integration challenges](#the-five-integration-challenges) · [Releases and immutable tags](#releases-and-immutable-tags) · [Runbook](#runbook-the-apply-failed-halfway) · [Failure modes](#failure-modes) · [What went wrong](#what-went-wrong-while-building-this) · [What is still open](#what-is-still-open)
@@ -202,8 +202,7 @@ What not to do, and why:
 ## What is still open
 
 - **API Gateway resources cannot be scoped by name.** The nonprod role is denied any write to an API tagged `Environment=prod`, but a stage or route does not carry its API's tag, so nonprod could still modify a prod API's routes in principle.
-- **GitHub created `infra-staging` with no protection rules** the first time a job named it. Anyone who can push a workflow to a branch could use it to assume the nonprod role. Nonprod cannot reach prod, but the environment should be restricted to `main`.
+- **GitHub creates a new environment with no protection rules** the first time a job names it, as it did `infra-staging`. Until someone restricts it to `main`, anyone who can push a workflow to a branch can use it to assume the nonprod role. Nonprod cannot reach prod. `infra-staging` was deleted with the staging directory; the next new environment will have the same gap until its first apply is followed by a branch rule.
 - **The digest bump is a hand edit** (challenge 1).
 - **`/version` reports `0.1.0`** in every environment: releases never update the app's own version. The `git_sha` it reports, `b59ff7d`, is the v0.2.3 commit, so the stamped SHA is the reliable identity.
-- **`infra/envs/staging/` still exists** with `enabled = false`, an empty state file (618 bytes), and the `infra-staging` GitHub environment. Removing them is a cleanup pull request.
 - **`GET /orders/{id}` returns `72` where `POST /orders` returned `72.0`.** DynamoDB's `Decimal` comes back as an integer when it is whole.
