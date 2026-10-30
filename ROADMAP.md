@@ -950,7 +950,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 8 | Modules & Composition | no lab yet — worked from this file, see [`infra/modules/ecr-repository`](infra/modules/ecr-repository) | **Done** |
 | 9 | Terraform in CI | no lab yet — worked from this file, see [`docs/TERRAFORM-CI.md`](docs/TERRAFORM-CI.md) | **Done** |
 | B | Capstone — Reproducible Cloud Foundation | no lab — see [`docs/CAPSTONE-B.md`](docs/CAPSTONE-B.md) | **Done** |
-| 10 | Kubernetes Fundamentals | — | Planned |
+| 10 | Kubernetes Fundamentals | no lab yet — worked from this file, see [`k8s`](k8s) | **Done** |
 | 11 | Configuration & Packaging | — | Planned |
 | 12 | Rollouts, Failure & Forensics | — | Planned |
 | 13 | Deploying from CI | — | Planned |
