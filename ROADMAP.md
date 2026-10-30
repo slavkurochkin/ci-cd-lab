@@ -954,7 +954,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 11 | Configuration & Packaging | no lab yet — see [`docs/CONFIG-AND-PACKAGING.md`](docs/CONFIG-AND-PACKAGING.md) | **Done** |
 | 12 | Rollouts, Failure & Forensics | no lab yet — see [`docs/ROLLOUTS-AND-FORENSICS.md`](docs/ROLLOUTS-AND-FORENSICS.md) and [`k8s/broken`](k8s/broken) | **Done** |
 | 13 | Deploying from CI | no lab yet — see [`docs/DEPLOYING-FROM-CI.md`](docs/DEPLOYING-FROM-CI.md) | **Done** |
-| 14 | GitOps with Argo CD | — | Planned |
+| 14 | GitOps with Argo CD | no lab yet — see [`docs/GITOPS.md`](docs/GITOPS.md) and [`deploy/`](deploy) | **Done** |
 | C | Capstone — The Delivery Platform | — | Planned |
 | 15 | Progressive Delivery | — | Planned |
 | 16 | Observability & Deployment Signals | — | Planned |
