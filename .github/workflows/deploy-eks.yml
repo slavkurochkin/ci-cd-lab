@@ -1,0 +1,257 @@
+# Deploy the api to the lab EKS cluster. Project 13.
+#
+# Run by hand, from main, while the cluster exists (`make eks-up`). Not on
+# push: the cluster is down between sessions, and a deploy that fails every
+# night because there is nothing to deploy to teaches people to ignore red.
+#
+#   gh workflow run deploy-eks.yml                     # deploy main
+#   gh workflow run deploy-eks.yml -f fault=crash      # an image that will not start
+#   gh workflow run deploy-eks.yml -f fault=wrong-version
+#
+# No AWS key and no kubeconfig are stored anywhere. Both jobs get short-lived
+# AWS credentials by OIDC; the kubeconfig is generated on the runner.
+name: Deploy to EKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      fault:
+        description: >-
+          Deploy a deliberately broken image, to prove the gate and the
+          rollback work. crash: exits on start. wrong-version: starts and
+          serves, but reports the wrong commit.
+        type: choice
+        options: [none, crash, wrong-version]
+        default: none
+
+permissions:
+  contents: read
+
+# One deploy at a time, and never cancel one halfway: a cancelled deploy can
+# stop between the apply and the rollback.
+concurrency:
+  group: deploy-eks
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER: lab
+  NAMESPACE: lab
+
+jobs:
+  image:
+    name: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      # Only the digest crosses between jobs. The registry host contains the
+      # account ID, which credential actions may mask, and GitHub drops a job
+      # output that contains a masked value.
+      digest: ${{ steps.result.outputs.digest }}
+    steps:
+      # The shared CI role: trusted on main, can read and push the api
+      # repository. The deploy job uses a different role.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Main CI (lab-03-ci.yml) tests, scans and publishes every commit on
+      # main as sha-<commit>. Deploy that artifact; do not build another.
+      # Right after a merge it may still be building, so wait for it.
+      - name: Find the image main CI published for this commit
+        id: published
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            digest=$(aws ecr batch-get-image --repository-name ci-cd-lab/api \
+              --image-ids "imageTag=sha-${SHA}" \
+              --accepted-media-types application/vnd.oci.image.index.v1+json \
+                application/vnd.oci.image.manifest.v1+json \
+                application/vnd.docker.distribution.manifest.v2+json \
+              --query 'images[0].imageId.imageDigest' --output text 2>/dev/null || true)
+            if [ -n "${digest}" ] && [ "${digest}" != "None" ]; then
+              echo "sha-${SHA} is ${digest}"
+              echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            echo "sha-${SHA} not in ECR yet (attempt ${i}/30); main CI may still be publishing"
+            sleep 30
+          done
+          echo "::error::no image tagged sha-${SHA} after 15 minutes. Is Lab 03 CI green for this commit?"
+          exit 1
+
+      - name: Log in to ECR
+        if: inputs.fault != 'none'
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      # The broken image is built on top of the real one, so everything but
+      # the fault is identical, and pushed under its own immutable tag.
+      - name: Build the faulty image
+        id: fault
+        if: inputs.fault != 'none'
+        env:
+          FAULT: ${{ inputs.fault }}
+          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          BASE_DIGEST: ${{ steps.published.outputs.digest }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          repo="${REGISTRY}/ci-cd-lab/api"
+          mkdir -p "${RUNNER_TEMP}/fault"
+          {
+            echo "FROM ${repo}@${BASE_DIGEST}"
+            case "${FAULT}" in
+              crash) echo 'CMD ["python", "-c", "raise SystemExit(\"fault injected: crash on start\")"]' ;;
+              wrong-version) echo 'ENV GIT_SHA=fault-injected' ;;
+            esac
+          } > "${RUNNER_TEMP}/fault/Dockerfile"
+          cat "${RUNNER_TEMP}/fault/Dockerfile"
+          tag="${repo}:fault-${FAULT}-${RUN_ID}"
+          docker build --platform linux/amd64 -t "${tag}" "${RUNNER_TEMP}/fault"
+          docker push "${tag}"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "${tag}" | cut -d@ -f2)
+          echo "fault image ${FAULT} is ${digest}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Choose the digest to deploy
+        id: result
+        env:
+          FAULT_DIGEST: ${{ steps.fault.outputs.digest }}
+          PUBLISHED_DIGEST: ${{ steps.published.outputs.digest }}
+        run: |
+          set -euo pipefail
+          digest="${FAULT_DIGEST:-${PUBLISHED_DIGEST}}"
+          case "${digest}" in
+            sha256:*) ;;
+            *) echo "::error::not a digest: '${digest}'"; exit 1 ;;
+          esac
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+  deploy:
+    name: deploy
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The deploy role trusts this environment's OIDC subject and nothing else,
+    # so this line is what lets the job into the cluster at all.
+    environment: eks
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DIGEST: ${{ needs.image.outputs.digest }}
+      EXPECTED_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_EKS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Generated here, from the role's credentials, and gone with the runner.
+      # Nothing to store as a secret.
+      - name: Connect to the cluster
+        run: |
+          set -euo pipefail
+          aws eks update-kubeconfig --name "${CLUSTER}" --region "${AWS_REGION}"
+          kubectl version
+          kubectl -n "${NAMESPACE}" auth can-i patch deployments
+          echo "cluster-wide: $(kubectl auth can-i list nodes 2>&1 || true)"
+
+      - name: Record the revision running now
+        id: before
+        run: |
+          set -euo pipefail
+          revision=$(kubectl -n "${NAMESPACE}" get deployment api \
+            -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}' 2>/dev/null || true)
+          echo "revision before this deploy: ${revision:-none}"
+          echo "revision=${revision}" >> "${GITHUB_OUTPUT}"
+
+      - name: Apply
+        id: apply
+        env:
+          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          FAULT: ${{ inputs.fault }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # Wrap the overlay and pin the digest. Never a tag: a tag can be
+          # moved, and then nobody can say what is running.
+          mkdir -p k8s/deploy
+          printf '%s\n' \
+            'resources:' \
+            '  - ../overlays/eks' \
+            'images:' \
+            '  - name: ci-cd-lab/api' \
+            "    newName: ${REGISTRY}/ci-cd-lab/api" \
+            "    digest: ${DIGEST}" > k8s/deploy/kustomization.yaml
+          kubectl apply --server-side --field-manager=deploy-eks -k k8s/deploy
+          # The deployment record: which commit and run made this revision.
+          # `kubectl rollout history` shows it in CHANGE-CAUSE.
+          kubectl -n "${NAMESPACE}" annotate deployment api --overwrite \
+            "kubernetes.io/change-cause=${EXPECTED_SHA:0:7} run ${RUN_ID} fault=${FAULT}"
+
+      # `kubectl apply` returns when the API server accepts the change, not
+      # when it is true. This is the step that waits for it to be true. The
+      # Deployment's progressDeadlineSeconds (60s) ends a stuck rollout
+      # sooner than this timeout.
+      - name: Wait for the rollout
+        run: kubectl -n "${NAMESPACE}" rollout status deployment/api --timeout=180s
+
+      - name: Smoke test through the load balancer
+        run: .github/scripts/smoke-eks.sh
+
+      - name: Roll back
+        if: failure() && steps.apply.outcome == 'success'
+        env:
+          BEFORE: ${{ steps.before.outputs.revision }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BEFORE}" ]; then
+            # Rollback is unsafe or impossible here: there is no earlier
+            # revision. Leave the broken one for someone to look at.
+            echo "::error::first deploy to this cluster failed; there is no earlier revision to roll back to"
+            exit 1
+          fi
+          echo "::warning::deploy failed; rolling back to revision ${BEFORE}"
+          kubectl -n "${NAMESPACE}" rollout undo deployment/api
+          kubectl -n "${NAMESPACE}" rollout status deployment/api --timeout=180s
+          echo "now running:"
+          kubectl -n "${NAMESPACE}" get deployment api \
+            -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+          # The run stays failed. A rollback is a recovery, not a success.
+
+      - name: Record the outcome
+        if: always()
+        env:
+          OUTCOME: ${{ job.status }}
+          FAULT: ${{ inputs.fault }}
+        run: |
+          {
+            echo "### Deploy to EKS: ${OUTCOME}"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| commit | \`${EXPECTED_SHA:0:7}\` |"
+            echo "| fault | ${FAULT} |"
+            echo "| digest deployed | \`${DIGEST}\` |"
+            echo
+            echo '```'
+            kubectl -n "${NAMESPACE}" rollout history deployment/api 2>&1 | tail -6 || true
+            kubectl -n "${NAMESPACE}" get pods -l app.kubernetes.io/name=api \
+              -o custom-columns='POD:.metadata.name,READY:.status.containerStatuses[0].ready,IMAGE:.spec.containers[0].image' 2>&1 \
+              | sed -E 's#[0-9]{12}\.dkr#<account>.dkr#' || true
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"

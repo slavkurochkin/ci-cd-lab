@@ -11,9 +11,15 @@ variable "cluster_name" {
 }
 
 variable "kubernetes_version" {
-  description = "EKS control plane version."
+  description = <<-DESC
+    EKS control plane version. Keep it in standard support: a version past its
+    standard-support date moves to extended support, which bills the control
+    plane at $0.60/hr instead of $0.10, with no other change. 1.31 was the
+    default here until Project 13 found it already in extended support.
+    Check with `aws eks describe-cluster-versions`.
+  DESC
   type        = string
-  default     = "1.31"
+  default     = "1.35"
 }
 
 variable "node_instance_type" {
@@ -50,12 +56,24 @@ variable "table_name" {
   default     = "lab-orders"
 }
 
-variable "ci_role_name" {
-  description = <<-DESC
-    Name of the CI role created by infra/ci-oidc. This stack looks it up and
-    attaches cluster-scoped permissions to it; it does not create it. Apply
-    infra/ci-oidc first or the data lookup fails.
-  DESC
+variable "github_owner_id" {
+  description = "Numeric GitHub account ID of the repository owner. Same value as infra/ci-oidc."
   type        = string
-  default     = "ci-cd-lab-ci"
+}
+
+variable "github_repo_id" {
+  description = "Numeric GitHub repository ID. Same value as infra/ci-oidc."
+  type        = string
+}
+
+variable "deploy_environment" {
+  description = "GitHub environment the deploy job runs in. The deploy role trusts this environment and nothing else."
+  type        = string
+  default     = "eks"
+}
+
+variable "app_namespace" {
+  description = "Namespace the api runs in. CI may edit this namespace and no other; Pod Identity binds the api's ServiceAccount here."
+  type        = string
+  default     = "lab"
 }

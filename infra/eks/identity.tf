@@ -6,7 +6,7 @@
 # credentials; the SDK inside the container picks them up with no configuration.
 # There is no key to rotate because there is no key.
 #
-# This is the half a secrets manager cannot do for you. Doppler (Project 11)
+# This is the half a secrets manager cannot do for you. Vault (Project 11)
 # holds application secrets -- a third-party API key, a webhook URL. Put an AWS
 # access key in it and you have reintroduced exactly the long-lived credential
 # this file exists to delete, and now it lives in two places instead of one.
@@ -14,10 +14,13 @@
 resource "aws_dynamodb_table" "orders" {
   name         = var.table_name
   billing_mode = "PAY_PER_REQUEST" # on-demand: no idle cost, inside the always-free tier
-  hash_key     = "pk"
+  # The key the app reads and writes (api/store.py). This was `pk` until
+  # Project 13: every request would have failed with a ValidationException,
+  # and only a test that wrote an order would have noticed.
+  hash_key = "order_id"
 
   attribute {
-    name = "pk"
+    name = "order_id"
     type = "S"
   }
 }
@@ -70,7 +73,7 @@ resource "aws_iam_role_policy" "api_pod" {
 # matched, not what you meant to match.
 resource "aws_eks_pod_identity_association" "api" {
   cluster_name    = aws_eks_cluster.lab.name
-  namespace       = "default"
+  namespace       = var.app_namespace
   service_account = "api"
   role_arn        = aws_iam_role.api_pod.arn
 
