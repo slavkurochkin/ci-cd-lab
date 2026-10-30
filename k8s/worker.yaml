@@ -1,0 +1,50 @@
+# Project 10: the worker as a Job, not a Deployment.
+#
+# The worker prints its build identity and exits 0. A Deployment exists to
+# keep a process running, so it restarts a container that exits, even
+# successfully, and backs off until the pod shows CrashLoopBackOff. README.md
+# shows that happening. A Job runs it to completion once.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: worker
+  namespace: lab
+  labels:
+    app.kubernetes.io/name: worker
+spec:
+  backoffLimit: 2
+  # Delete the finished Job and its pod after an hour, instead of keeping
+  # them until someone remembers to.
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        # Numeric, because the image says `USER node`. With only a name the
+        # kubelet cannot check it is not root, and refuses to start the
+        # container: "image has non-numeric user (node), cannot verify user
+        # is non-root".
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: worker
+          image: ci-cd-lab/worker:local
+          imagePullPolicy: Never
+          env:
+            - name: ENVIRONMENT
+              value: minikube
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
