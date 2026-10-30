@@ -8,14 +8,9 @@ output "cluster_endpoint" {
   value       = aws_eks_cluster.lab.endpoint
 }
 
-output "deploy_role_arn" {
-  description = "Set as the repository variable AWS_EKS_DEPLOY_ROLE_ARN. An ARN, not a credential: OIDC means there is nothing secret to store."
-  value       = aws_iam_role.deploy.arn
-}
-
 output "api_service_account" {
   description = "The ServiceAccount the API's pods must use for Pod Identity to hand them credentials. Deploy with any other name and the pods get nothing, silently."
-  value       = aws_eks_pod_identity_association.api.service_account
+  value       = "api"
 }
 
 output "orders_table_name" {

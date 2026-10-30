@@ -57,6 +57,9 @@ resource "aws_iam_role_policy" "api_pod" {
         "dynamodb:Query",
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
+        # Project 14: the pre-sync hook checks the table and its key before
+        # Argo CD rolls out a new version.
+        "dynamodb:DescribeTable",
       ]
       # One table, by ARN. Not "dynamodb:*" on "*", which is what this becomes
       # the first time someone debugs a permissions error in a hurry.
@@ -72,8 +75,10 @@ resource "aws_iam_role_policy" "api_pod" {
 # mistyped label selector, and diagnosed the same way: check what actually
 # matched, not what you meant to match.
 resource "aws_eks_pod_identity_association" "api" {
+  for_each = toset(var.app_namespaces)
+
   cluster_name    = aws_eks_cluster.lab.name
-  namespace       = var.app_namespace
+  namespace       = each.value
   service_account = "api"
   role_arn        = aws_iam_role.api_pod.arn
 

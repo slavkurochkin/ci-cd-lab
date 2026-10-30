@@ -15,6 +15,7 @@ namespace: lab
 resources:
   - ../../base
   - serviceaccount.yaml
+  - table-check.yaml
 
 replicas:
   - name: api
@@ -29,6 +30,10 @@ configMapGenerator:
       - ENVIRONMENT=eks
       - AWS_REGION=us-east-1
       - ORDERS_TABLE=lab-orders
+    # Project 14: applied before the table check (wave -1) needs it.
+    options:
+      annotations:
+        argocd.argoproj.io/sync-wave: "-2"
 
 patches:
   # Local-only objects from the base.

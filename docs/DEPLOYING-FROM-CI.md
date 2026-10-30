@@ -1,5 +1,7 @@
 # Deploying from CI
 
+> **Retired in Project 14.** Argo CD now pulls from Git, so `deploy-eks.yml` and the `lab-eks-deploy` role were removed: no CI job holds cluster credentials. They are in Git history at commit `f5fb462`. See [GITOPS.md](GITOPS.md).
+
 A workflow that deploys the api to a real EKS cluster it cannot see, holds no AWS key and no kubeconfig, and reports success only after the rollout has converged and a smoke test has passed through the load balancer. Project 13, about $0.20 for the session.
 
 | Path | What |

@@ -11,7 +11,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help doctor status labs lab verify verify-all reset solution \
         test test-integration lint fmt build-images run-api ci-local \
-        aws-sweep eks-up eks-down eks-cost clean
+        aws-sweep eks-up eks-down eks-cost argocd-bootstrap clean
 
 LAB ?=
 PYTEST := uv run pytest
@@ -155,22 +155,23 @@ aws-sweep:
 # ---------------------------------------------------------------------------
 
 eks-up:
-	@test -f infra/eks/terraform.tfvars || { \
-		echo "infra/eks/terraform.tfvars is missing. Create it first:"; \
-		echo ""; \
-		echo "    cp infra/eks/terraform.tfvars.example infra/eks/terraform.tfvars"; \
-		echo ""; \
-		echo "then set github_repo -- it decides which repository may assume your"; \
-		echo "deploy role, so it has no default on purpose."; exit 1; }
 	@./scripts/aws-guard.sh true
 	@cd infra/eks && terraform init -input=false && terraform apply -auto-approve
 	@aws eks update-kubeconfig --name lab --region $${AWS_LAB_REGION:-us-east-1}
-	@# The deploy role may edit one namespace and cannot create it, so the
-	@# cluster creator (you) does.
-	@kubectl create namespace lab --dry-run=client -o yaml | kubectl apply -f -
 	@echo ""
-	@echo "  Cluster up. It is billing now. End the session with: make eks-down"
+	@echo "  Cluster up. It is billing now. Next: make argocd-bootstrap"
+	@echo "  End the session with: make eks-down"
 	@echo ""
+
+# Project 14. Installs Argo CD from Git, then hands it the root Application.
+# From there the cluster pulls everything else from deploy/ on main; nothing
+# deploys to it. Run once after every `make eks-up`.
+argocd-bootstrap:
+	@kubectl apply --server-side -k deploy/argocd
+	@kubectl -n argocd rollout status deploy/argocd-repo-server --timeout=300s
+	@kubectl apply -f deploy/bootstrap/root.yaml
+	@echo ""
+	@echo "  Argo CD is pulling from Git. Watch: kubectl -n argocd get applications -w"
 
 eks-down:
 	@./scripts/eks-down.sh
