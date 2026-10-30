@@ -1,0 +1,123 @@
+# The api: a Deployment behind a ClusterIP Service. Projects 10 and 11.
+#
+# Nothing here says which environment it is. The overlays set the namespace,
+# the replica count, the resources and the config.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: api
+  annotations:
+    # Reloader restarts the pods when this Secret changes. Environment
+    # variables are read once, at container start; without a restart, a
+    # rotated secret reaches nothing until the next deploy.
+    secret.reloader.stakater.com/reload: api-secrets
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # Numeric, because the image says `USER app`. With only a name the
+        # kubelet cannot check it is not root (Project 10).
+        runAsUser: 1001
+        runAsGroup: 1001
+      initContainers:
+        # Creates the orders table if it is missing. On a fresh namespace it
+        # fails until DynamoDB answers, and the kubelet retries it with
+        # backoff: the cluster works out the start-up order without a script.
+        # Local only. In AWS the table is Terraform's (Capstone B).
+        - name: create-table
+          image: ci-cd-lab/api:local
+          imagePullPolicy: Never
+          command: ["python", "-c", "from api.store import OrderStore; OrderStore().create_table()"]
+          envFrom:
+            - configMapRef:
+                name: api-config
+            - secretRef:
+                name: api-secrets
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: api
+          image: ci-cd-lab/api:local
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8000
+          # Config and secrets from outside the image and outside this file.
+          # api-config comes from the kustomization's configMapGenerator;
+          # api-secrets is written by External Secrets from Vault.
+          envFrom:
+            - configMapRef:
+                name: api-config
+            - secretRef:
+                name: api-secrets
+          # Startup: generous, and only once. Liveness does not start counting
+          # until this has passed, so a slow cold start is not killed.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          # Readiness: is this pod fit to receive traffic right now. Failing
+          # it removes the pod from the Service; nothing is restarted.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+          # Liveness: is the process wedged. Failing it restarts the
+          # container. It must not depend on anything outside the process:
+          # if it checked DynamoDB, a database blip would restart every pod
+          # at once.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

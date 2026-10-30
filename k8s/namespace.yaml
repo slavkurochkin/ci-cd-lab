@@ -1,7 +1,0 @@
-# Project 10. A scope for names, not a security boundary: a pod here can
-# still reach every Service in every other namespace unless a NetworkPolicy
-# says otherwise, and minikube does not enforce NetworkPolicy by default.
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: lab

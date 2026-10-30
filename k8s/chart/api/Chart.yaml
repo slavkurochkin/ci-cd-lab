@@ -1,0 +1,7 @@
+apiVersion: v2
+name: lab-api
+description: The ci-cd-lab api service. Project 11's Helm packaging of what k8s/base deploys with Kustomize.
+type: application
+version: 0.1.0
+# The release the default image tag points at.
+appVersion: "0.2.3"

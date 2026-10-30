@@ -12,17 +12,22 @@ minikube start --cpus 2 --memory 4096
 (cd app/api    && minikube image build -t "ci-cd-lab/api:local"    -f Dockerfile .)
 (cd app/worker && minikube image build -t "ci-cd-lab/worker:local" -f Dockerfile .)
 
-kubectl apply --server-side -f k8s/namespace.yaml -f k8s/api.yaml -f k8s/worker.yaml
-kubectl -n lab rollout status deploy/api
+kubectl apply --server-side -k k8s/overlays/dev
+kubectl -n lab-dev rollout status deploy/api
 ```
+
+Since Project 11 the manifests live in `base/` with `overlays/dev` and `overlays/prod`, and need the platform from `platform/install.sh` (Vault, External Secrets, Reloader, metrics-server). The demos below were run on Project 10's flat manifests in a namespace called `lab`; [`docs/CONFIG-AND-PACKAGING.md`](../docs/CONFIG-AND-PACKAGING.md) is Project 11.
 
 `minikube stop` when you are done. It costs nothing in AWS, but it is a VM on your laptop.
 
-| File | What |
+| Path | What |
 |---|---|
-| `namespace.yaml` | `lab` |
-| `api.yaml` | Deployment (2 replicas, readiness on `/readyz`, liveness on `/healthz`) and a ClusterIP Service on port 80 |
-| `worker.yaml` | a **Job**, not a Deployment; see below |
+| `base/api.yaml` | Deployment and a ClusterIP Service on port 80 |
+| `base/worker.yaml` | a **Job**, not a Deployment; see below |
+| `base/dynamodb.yaml`, `base/secrets.yaml` | Project 11: DynamoDB Local, and the api's secrets from Vault |
+| `overlays/dev`, `overlays/prod` | Project 11: namespace, replicas, resources, config |
+| `chart/api` | Project 11: the same api as a Helm chart |
+| `platform/install.sh` | Project 11: what the manifests assume is installed |
 
 Everything below was run on minikube v1.38.1, Kubernetes v1.35.1, October 2026.
 

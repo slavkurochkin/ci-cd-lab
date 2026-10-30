@@ -52,9 +52,13 @@ def dynamodb_resource():
     endpoint = os.getenv("DYNAMODB_ENDPOINT")
     if endpoint:
         kwargs["endpoint_url"] = endpoint
-        # DynamoDB Local validates that credentials exist, not that they are real.
-        kwargs.setdefault("aws_access_key_id", "local")
-        kwargs.setdefault("aws_secret_access_key", "local")
+        # DynamoDB Local validates that credentials exist, not that they are
+        # real. They come from the environment when set (Project 11 syncs them
+        # from a secrets store) and fall back to "local" for CI and laptops.
+        # The fallback used to be unconditional: kwargs.setdefault only looks
+        # at kwargs, so credentials in the environment were silently ignored.
+        kwargs["aws_access_key_id"] = os.getenv("AWS_ACCESS_KEY_ID", "local")
+        kwargs["aws_secret_access_key"] = os.getenv("AWS_SECRET_ACCESS_KEY", "local")
     return boto3.resource("dynamodb", **kwargs)
 
 

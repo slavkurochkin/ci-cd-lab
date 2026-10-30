@@ -1,0 +1,54 @@
+# DynamoDB Local, so /orders works in the cluster. Local only: in AWS this is
+# a real table, created by Terraform (Capstone B).
+#
+# -inMemory: nothing survives a restart, which is what a lab wants.
+# -sharedDb: one database for every access key. Without it DynamoDB Local
+# keeps a separate database per key, and rotating the api's secret would make
+# every stored order vanish.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynamodb
+  labels:
+    app.kubernetes.io/name: dynamodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dynamodb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dynamodb
+    spec:
+      containers:
+        - name: dynamodb
+          image: amazon/dynamodb-local:2.5.4
+          args: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+          ports:
+            - name: dynamodb
+              containerPort: 8000
+          readinessProbe:
+            tcpSocket:
+              port: dynamodb
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynamodb
+  labels:
+    app.kubernetes.io/name: dynamodb
+spec:
+  selector:
+    app.kubernetes.io/name: dynamodb
+  ports:
+    - name: dynamodb
+      port: 8000
+      targetPort: dynamodb

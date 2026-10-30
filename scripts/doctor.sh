@@ -58,6 +58,7 @@ check kubectl   "Track C (10-14)" "kubernetes-cli"             optional
 check minikube  "Track C (10-12)" "minikube"                   optional
 check doppler   "Track C (11)"    "dopplerhq/cli/doppler"      optional
 check helm      "Track C (11)"    "helm"                       optional
+check kubeconform "Track C (11)" "kubeconform"                optional
 check argocd    "Track C (14)"    "argocd"                     optional
 check trivy     "Track D (17)"    "trivy"                      optional
 check cosign    "Track D (17)"    "cosign"                     optional
