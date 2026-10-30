@@ -3,6 +3,10 @@
 
 environment = "staging"
 
+# Capstone B, second deliverable: this line destroys the environment. The
+# directory stays so CI still has the state and the backend to destroy with.
+enabled = false
+
 # api 0.2.3, linux/amd64 manifest. Not the index digest (sha256:6201382c...):
 # Lambda rejects an image index. To deploy a new release, change this line.
 api_image_digest = "sha256:b3af8458ebb6c9748be00d87cff0e4bfcb0fbaba45d54ff2ce514adf5232c553"
