@@ -59,6 +59,11 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          # The registry host and every image reference contain the account
+          # ID, and this repository's run logs are public. Masked from here
+          # on. Only the digest crosses to the deploy job, so the masking
+          # cannot empty a job output.
+          mask-aws-account-id: true
 
       # Main CI (lab-03-ci.yml) tests, scans and publishes every commit on
       # main as sha-<commit>. Deploy that artifact; do not build another.
@@ -159,6 +164,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_EKS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
 
       # Generated here, from the role's credentials, and gone with the runner.
       # Nothing to store as a secret.
@@ -197,7 +203,13 @@ jobs:
             '  - name: ci-cd-lab/api' \
             "    newName: ${REGISTRY}/ci-cd-lab/api" \
             "    digest: ${DIGEST}" > k8s/deploy/kustomization.yaml
-          kubectl apply --server-side --field-manager=deploy-eks -k k8s/deploy
+          # --force-conflicts: this pipeline owns the image field. After an
+          # automatic rollback, `kubectl rollout undo` holds it under the
+          # manager "kubectl", and without this flag the next deploy is
+          # refused with "Apply failed with 1 conflict ... .image". Measured:
+          # the first deploy after a rollback failed at this step. The undo
+          # is a temporary override; the next deploy takes the field back.
+          kubectl apply --server-side --force-conflicts --field-manager=deploy-eks -k k8s/deploy
           # The deployment record: which commit and run made this revision.
           # `kubectl rollout history` shows it in CHANGE-CAUSE.
           kubectl -n "${NAMESPACE}" annotate deployment api --overwrite \
