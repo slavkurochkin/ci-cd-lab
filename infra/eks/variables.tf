@@ -23,9 +23,20 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_type" {
-  description = "Node size. t3.medium is the smallest that comfortably runs the addons plus both services."
+  description = <<-DESC
+    Node size. t3.small: 2 vCPU, 2 GiB, up to 11 pods (3 ENIs x 4 IPs). The
+    system pods that use pod IPs are coredns and little else, so that is room
+    for the api with plenty to spare.
+
+    It was t3.medium. An account on AWS's free plan may only launch
+    free-tier-eligible types, and the node group sat in CREATING for 25
+    minutes while every launch failed with "The specified instance type is
+    not eligible for Free Tier" -- visible only in the Auto Scaling group's
+    activity history, not in the node group's health. List the allowed types:
+      aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true
+  DESC
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "node_count" {
