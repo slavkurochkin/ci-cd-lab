@@ -129,14 +129,14 @@ From Project 13 the cluster is real, because the lessons there — a runner that
 export AWS_LAB_REGION=us-east-1
 export AWS_LAB_ACCOUNT_ID=<your lab account>
 
-make eks-up      # ~15 min, starts billing at ~$0.21/hr
+make eks-up      # ~15 min, starts billing at ~$0.19/hr
 # ... work the lab ...
 make eks-down    # destroys everything, then sweeps for orphans
 ```
 
 `make eks-down` is the last command of every session. It is safe to run twice, and it deliberately does not trust `terraform destroy` — see [COST.md](COST.md) for what it does and why the order matters.
 
-A four-hour session costs about **$0.84**. A cluster you forget about costs **$4.50/day**. Put both exports in your shell profile so the guard always knows which account it is allowed to touch.
+A four-hour session costs about **$0.75**. A cluster you forget about costs **$4.50/day**. Put both exports in your shell profile so the guard always knows which account it is allowed to touch.
 
 ---
 

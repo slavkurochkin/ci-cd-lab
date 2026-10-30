@@ -1,6 +1,6 @@
 # infra/eks
 
-The cluster Projects 13 and 14 deploy to. Roughly **$0.21/hour** while it exists,
+The cluster Projects 13 and 14 deploy to. Roughly **$0.19/hour** while it exists,
 **$0** when it does not.
 
 ```bash
@@ -27,14 +27,19 @@ the failure each line prevents.
 |---|---|---|
 | VPC, 2 public subnets, IGW | Two AZs because EKS requires two. No NAT. | $0 |
 | EKS control plane | `authentication_mode = "API"` | $0.10/hr |
-| Managed node group | 2 × `t3.medium`, fixed size | $0.083/hr |
+| Managed node group | 2 × `t3.small` (AL2023), fixed size; free-plan accounts cannot launch `t3.medium` | $0.042/hr |
 | Addons | vpc-cni, kube-proxy, coredns, **eks-pod-identity-agent** | $0 |
-| GitHub OIDC provider + deploy role | Scoped to one repo, Edit on one namespace | $0 |
+| Deploy role (`lab-eks-deploy`) | Trusted only from the `eks` GitHub environment; `eks:DescribeCluster` plus Edit on namespace `lab`. The OIDC provider itself lives in `infra/ci-oidc` | $0 |
+| Public IPv4 | One per node (no NAT) | ~$0.01/hr |
 | Pod Identity association | ServiceAccount `api` → a DynamoDB role | $0 |
 | DynamoDB table | On-demand, always-free tier | $0 |
 
-A `Service` of type LoadBalancer adds an NLB at ~$0.023/hr. Terraform does not
-create it and does not know about it — see the teardown note below.
+A `Service` of type LoadBalancer adds a Classic ELB, about $0.035/hr with its
+addresses. Terraform does not create it and does not know about it; see the
+teardown note below.
+
+`make eks-up` also creates the `lab` namespace. The deploy role may edit that
+namespace and cannot create it.
 
 ## The two identities, which are not the same thing
 
@@ -42,12 +47,12 @@ create it and does not know about it — see the teardown note below.
 ServiceAccount to an IAM role, and the agent hands the pod short-lived STS
 credentials. No key exists.
 
-`ci.tf` is how a **runner** gets them: GitHub OIDC, then a separate EKS access
-entry for authorization *inside* the cluster. Authentication and authorization
+`ci.tf` is how the **deploy job** gets them: GitHub OIDC into its own role,
+then a separate EKS access entry for authorization *inside* the cluster. Authentication and authorization
 are different resources here, and an IAM principal with no access entry
 authenticates perfectly and then gets `Unauthorized` from the API server.
 
-Neither is a job for a secrets manager. Doppler (Project 11) holds application
+Neither is a job for a secrets manager. Vault (Project 11) holds application
 secrets; putting an AWS key in it would undo both of these files.
 
 ## Teardown
