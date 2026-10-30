@@ -1,0 +1,57 @@
+# Before a new version rolls out, check the table it will use. Project 14.
+#
+# The stand-in for a migration: a step that must succeed before the
+# Deployment changes. It is an Argo CD Sync hook in wave -1, after the
+# ServiceAccount and ConfigMap (wave -2) and before the Deployment (wave 0).
+# If it fails, the sync stops and the old pods keep serving.
+#
+# Not a PreSync hook: PreSync runs before anything is applied, and on a new
+# namespace the ServiceAccount and ConfigMap this Job needs would not exist.
+#
+# It asserts the key the app writes. Project 13 found the table defined with
+# key `pk`; this check fails a sync with that mistake instead of letting
+# every order fail after the rollout.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: table-check
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: check
+          image: ci-cd-lab/api:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: api-config
+          command:
+            - python
+            - -c
+            - |
+              import os, sys, boto3
+              name = os.environ["ORDERS_TABLE"]
+              table = boto3.client("dynamodb").describe_table(TableName=name)["Table"]
+              keys = [k["AttributeName"] for k in table["KeySchema"]]
+              print(f"{name}: status={table['TableStatus']} key={keys}")
+              if table["TableStatus"] != "ACTIVE" or keys != ["order_id"]:
+                  sys.exit(f"{name} is not ready for this version: expected ACTIVE with key ['order_id']")
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

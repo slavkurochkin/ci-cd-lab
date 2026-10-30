@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Smoke test for the api on EKS, through its load balancer. Project 13.
 #
+# Its workflow (deploy-eks.yml) was retired in Project 14, when Argo CD took
+# over deploys. It still runs by hand against any namespace whose Service has
+# a load balancer:  EXPECTED_SHA=<commit> NAMESPACE=<ns> .github/scripts/smoke-eks.sh
+#
 # Asserts what a user would notice, not what Kubernetes reports:
 #   - the service answers from outside the cluster
 #   - every answer comes from the commit this run deployed (EXPECTED_SHA)

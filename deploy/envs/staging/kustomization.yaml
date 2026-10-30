@@ -1,0 +1,41 @@
+# The api in staging: what is running there is what this file says. Project 14.
+#
+# Argo CD (deploy/apps/api-staging.yaml) applies this directory and keeps the
+# cluster matching it. To change what runs in staging, change this file in a
+# pull request.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: api-staging
+
+resources:
+  - ../../../k8s/overlays/eks
+
+# The release. A digest, from GHCR: public, so the nodes pull it with no
+# credentials, and no account ID ends up in Git. Main CI publishes the same
+# digest to GHCR and ECR.
+images:
+  - name: ci-cd-lab/api
+    newName: ghcr.io/slavkurochkin/ci-cd-lab/api
+    digest: sha256:20a95bbc6cd6c48c1cf08c44eb8cded7b1158022f033fe5cb7e8ed0073a61ac1
+
+replicas:
+  - name: api
+    count: 2
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=staging
+
+# No load balancer per environment: nothing outside the cluster calls the
+# api here, and each Classic ELB bills by the hour.
+patches:
+  - target:
+      kind: Service
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: ClusterIP

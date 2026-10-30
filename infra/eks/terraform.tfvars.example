@@ -1,24 +1,16 @@
-# Copy to terraform.tfvars and set github_repo. That file is gitignored.
+# Optional. Every variable has a default; copy to terraform.tfvars (gitignored)
+# only to change one. Shown so you can see what you are paying for without
+# reading variables.tf.
 #
-#   cp terraform.tfvars.example terraform.tfvars
-#
-# github_repo is the only variable with no default, deliberately: it is the
-# condition that decides which repository may assume your deploy role, and a
-# default would be a default answer to "who is allowed into my cluster".
-
-github_repo     = "your-github-username/ci-cd-lab"
-github_owner_id = "12345678"  # same values as infra/ci-oidc/terraform.tfvars
-github_repo_id  = "987654321"
-
-# Everything below is optional -- these are the defaults, shown so you can see
-# what you are paying for without reading variables.tf.
+# Until Project 14 this file also held github_repo and the GitHub IDs, for the
+# CI deploy role. With Argo CD pulling from Git, no CI job needs the cluster,
+# and that role is gone.
 
 # region             = "us-east-1"   # must match AWS_LAB_REGION
 # cluster_name       = "lab"         # `make eks-up` hardcodes this in update-kubeconfig
-# kubernetes_version = "1.35"   # must be in standard support, or $0.60/hr
+# kubernetes_version = "1.35"        # must be in standard support, or $0.60/hr
 # node_instance_type = "t3.small"    # ~$0.0208/hr each; free-plan accounts allow only free-tier-eligible types
 # node_count         = 2             # ~$0.042/hr total
 # vpc_cidr           = "10.42.0.0/16"
 # table_name         = "lab-orders"
-# app_namespace      = "lab"
-# deploy_environment = "eks"
+# app_namespaces     = ["api-dev", "api-staging"]

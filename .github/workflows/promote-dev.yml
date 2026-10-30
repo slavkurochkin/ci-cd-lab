@@ -1,0 +1,110 @@
+# CI's last step under GitOps: propose the new digest for dev. Project 14.
+#
+# Main CI (Lab 03) tests, scans and publishes every commit on main. When it
+# succeeds, this opens a pull request changing deploy/envs/dev to that
+# commit's digest, and turns on auto-merge. Argo CD notices the merge and
+# rolls dev out. Nothing here can reach the cluster: no AWS role, no
+# kubeconfig, no secret.
+#
+# Staging is promoted by a person, with a pull request copying dev's digest
+# into deploy/envs/staging.
+name: Promote to dev
+
+on:
+  # Safe here: this checks out main, never the triggering run's code, and only
+  # reads the head SHA from the event.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: ["Lab 03 CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-dev
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: promote
+    # A push to main that Lab 03 CI passed (and so published), or a manual run.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the promotion branch
+      pull-requests: write # open the pull request, enable auto-merge
+      actions: write # start the required checks on it
+    env:
+      FILE: deploy/envs/dev/kustomization.yaml
+      IMAGE: slavkurochkin/ci-cd-lab/api
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      # GHCR is public, so an anonymous token reads it. No registry login.
+      - name: Find the digest main CI published
+        id: digest
+        run: |
+          set -euo pipefail
+          token=$(curl -fsS "https://ghcr.io/token?scope=repository:${IMAGE}:pull" | jq -r .token)
+          digest=$(curl -fsSI -H "Authorization: Bearer ${token}" \
+            -H "Accept: application/vnd.oci.image.index.v1+json" \
+            -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+            "https://ghcr.io/v2/${IMAGE}/manifests/sha-${SHA}" \
+            | tr -d '\r' | awk -F': ' 'tolower($1)=="docker-content-digest" {print $2}')
+          case "${digest}" in
+            sha256:*) echo "sha-${SHA} is ${digest}" ;;
+            *) echo "::error::no digest for ghcr.io/${IMAGE}:sha-${SHA}"; exit 1 ;;
+          esac
+          current=$(awk '/digest: sha256:/ {print $2}' "${FILE}")
+          echo "dev runs ${current}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+          if [ "${digest}" = "${current}" ]; then
+            echo "dev already runs this digest; nothing to promote"
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Open the promotion pull request
+        if: steps.digest.outputs.changed == 'true'
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          branch="promote/dev-${SHA:0:7}"
+          sed -i -E "s|^(    digest: )sha256:[0-9a-f]{64}$|\1${DIGEST}|" "${FILE}"
+          git diff --exit-code --quiet "${FILE}" && { echo "::error::the digest line in ${FILE} was not found"; exit 1; }
+          git diff "${FILE}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${branch}"
+          git commit -m "Promote ${SHA:0:7} to dev" -m "Digest ${DIGEST}, published by Lab 03 CI for ${SHA}." "${FILE}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "${branch}"
+
+          url=$(gh pr create --base main --head "${branch}" \
+            --title "Promote ${SHA:0:7} to dev" \
+            --body "Changes \`${FILE}\` to \`${DIGEST}\`, the image Lab 03 CI tested, scanned and published for ${SHA}. Argo CD rolls dev out when this merges. Opened by the Promote to dev workflow.")
+          echo "opened ${url}"
+
+          # A pull request opened with GITHUB_TOKEN triggers no workflows, so
+          # the required checks (ci-passed, terraform-passed) would never
+          # report and auto-merge would wait forever. Start them by hand on
+          # the branch. Neither publishes or applies anything off main.
+          gh workflow run lab-03-ci.yml --ref "${branch}"
+          gh workflow run lab-09-terraform.yml --ref "${branch}"
+
+          gh pr merge "${url}" --auto --squash --delete-branch
+          echo "auto-merge enabled: merges when ci-passed and terraform-passed pass" >> "${GITHUB_STEP_SUMMARY}"

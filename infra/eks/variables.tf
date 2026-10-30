@@ -45,16 +45,6 @@ variable "node_count" {
   default     = 2
 }
 
-variable "github_repo" {
-  description = "owner/repo allowed to assume the CI deploy role. This is the only thing standing between your cluster and any other repository on GitHub -- do not widen it to a wildcard owner."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$", var.github_repo))
-    error_message = "github_repo must be exactly owner/repo, with no wildcard and no leading https://github.com/."
-  }
-}
-
 variable "vpc_cidr" {
   description = "CIDR for the lab VPC."
   type        = string
@@ -67,24 +57,11 @@ variable "table_name" {
   default     = "lab-orders"
 }
 
-variable "github_owner_id" {
-  description = "Numeric GitHub account ID of the repository owner. Same value as infra/ci-oidc."
-  type        = string
-}
-
-variable "github_repo_id" {
-  description = "Numeric GitHub repository ID. Same value as infra/ci-oidc."
-  type        = string
-}
-
-variable "deploy_environment" {
-  description = "GitHub environment the deploy job runs in. The deploy role trusts this environment and nothing else."
-  type        = string
-  default     = "eks"
-}
-
-variable "app_namespace" {
-  description = "Namespace the api runs in. CI may edit this namespace and no other; Pod Identity binds the api's ServiceAccount here."
-  type        = string
-  default     = "lab"
+variable "app_namespaces" {
+  description = <<-DESC
+    Namespaces the api runs in, one per environment. Argo CD creates them
+    (Project 14); Pod Identity binds the api's ServiceAccount in each.
+  DESC
+  type        = list(string)
+  default     = ["api-dev", "api-staging"]
 }

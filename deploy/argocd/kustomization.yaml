@@ -1,0 +1,48 @@
+# Argo CD itself, from Git. Project 14.
+#
+# Applied once by hand (`make argocd-bootstrap`), and from then on by Argo CD:
+# deploy/apps/argocd.yaml points it at this directory, so an upgrade is a
+# pull request that changes the version below.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - namespace.yaml
+  # Pinned to a release, never `stable`: `stable` moves, and a cluster rebuilt
+  # next month would get a different Argo CD from the one this was tested on.
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.6/manifests/install.yaml
+
+# Single sign-on and notifications are not used here; that is two pods fewer
+# on two 2 GiB nodes.
+replicas:
+  - name: argocd-dex-server
+    count: 0
+  - name: argocd-notifications-controller
+    count: 0
+
+# Upstream sets no resource requests, which makes every Argo CD pod
+# BestEffort: first to be killed when a node runs short (Project 11 watched
+# that happen to Vault). Requests for the four that matter.
+patches:
+  - target: {kind: StatefulSet, name: argocd-application-controller}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}
+  - target: {kind: Deployment, name: argocd-repo-server}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 384Mi}}
+  - target: {kind: Deployment, name: argocd-server}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 25m, memory: 64Mi}, limits: {memory: 256Mi}}
+  - target: {kind: Deployment, name: argocd-redis}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 25m, memory: 32Mi}, limits: {memory: 128Mi}}
