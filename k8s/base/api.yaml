@@ -15,6 +15,21 @@ metadata:
     secret.reloader.stakater.com/reload: api-secrets
 spec:
   replicas: 2
+  # Project 12. One extra pod during a rollout, never one fewer: capacity
+  # stays at the replica count the whole way through. These are the
+  # defaults (25%/25%) rounded for 2 or 3 replicas, written out because
+  # at 4 replicas the defaults allow one pod down.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  # Old ReplicaSets kept for `kubectl rollout undo`. With 0 there is nothing
+  # to undo to.
+  revisionHistoryLimit: 5
+  # A rollout with no progress for this long is marked failed, and
+  # `kubectl rollout status` exits non-zero. Pods here are ready in ~3s.
+  progressDeadlineSeconds: 60
   selector:
     matchLabels:
       app.kubernetes.io/name: api
@@ -23,6 +38,9 @@ spec:
       labels:
         app.kubernetes.io/name: api
     spec:
+      # Covers the preStop sleep plus finishing requests already in flight.
+      # The kubelet sends SIGKILL when it runs out.
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         # Numeric, because the image says `USER app`. With only a name the
@@ -69,6 +87,17 @@ spec:
                 name: api-config
             - secretRef:
                 name: api-secrets
+          # Project 12. Deleting a pod starts two things at once: the kubelet
+          # stops the container, and the endpoints controller and kube-proxy
+          # take the pod out of the Service. uvicorn closes its socket on
+          # SIGTERM in milliseconds, before kube-proxy has caught up, and
+          # new connections routed to it are refused (156 in one measured
+          # rollout). Waiting 5s before SIGTERM lets the routing change land
+          # first. A sleep action, not `sh -c "sleep 5"`: no shell needed.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           # Startup: generous, and only once. Liveness does not start counting
           # until this has passed, so a slow cold start is not killed.
           startupProbe:

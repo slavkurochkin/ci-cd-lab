@@ -23,7 +23,7 @@ Run on minikube v1.38.1, Kubernetes v1.35.1, October 2026.
 | Roadmap check | Result |
 |---|---|
 | `kustomize build overlays/prod` differs from dev in replicas, resources and config only | Diffing the two builds, with the namespace name normalised: `ENVIRONMENT`, the ConfigMap name that hashes it, `replicas: 1 → 3`, and the resources. Nothing else. |
-| A pod with a failing readiness probe never receives traffic | **Partly shown.** With 3 ready prod pods and a fourth whose readiness probe checked a missing path, the Service had **3 endpoints**; the unready pod was not one of them. The request count meant to show it as traffic never ran: the node ran out of memory first (see [What went wrong](#what-went-wrong-while-building-this)). |
+| A pod with a failing readiness probe never receives traffic | **0 requests.** A fourth pod with prod's labels and a readiness probe on a missing path, under 60s of traffic (`k8s/rollout/loadgen.py`, Project 12): the three ready pods logged 86,216 + 86,376 + 85,905 `GET /version` = all 258,497 requests; the unready pod logged none, and 17 `GET /not-here` from the kubelet's probe, so it was running and listening the whole time. The EndpointSlice listed it with `ready=false`. First attempted during Project 11, when the node ran out of memory before the count ran. |
 | `helm template` output is valid and `helm lint` passes | `helm lint`: 0 failed. `helm template ... \| kubeconform -strict`: Deployment, Service, ConfigMap valid against Kubernetes 1.35; the ExternalSecret skipped (no schema for the custom resource). |
 
 ---
@@ -174,7 +174,7 @@ The last row is Helm's version of Project 10's selector typo. The `not` rules ha
 ## What went wrong while building this
 
 - **The node ran out of memory, and Vault and the API server went with it.** Docker Desktop's VM (7.65 GiB) is shared by minikube and every other container on the laptop, here about 4.6 GiB of unrelated services. The minikube profile was 63 days old and had 6 GiB, because `minikube start --memory 4096` does nothing to an existing profile. With two environments, Vault, External Secrets and two Java DynamoDBs, the VM ran out. The prod namespace was deleted and minikube stopped, to protect the other containers. `docs/SETUP.md` now says to check `docker stats` first.
-- **The readiness evaluation is incomplete** for that reason. See [Evaluation](#evaluation).
+- **The readiness evaluation could not finish** for that reason. It was completed in Project 12; see [Evaluation](#evaluation).
 - **The first secret value was the wrong shape** for DynamoDB Local 2.x.
 - **`store.py` ignored credentials in the environment** (`kwargs.setdefault`).
 - **A memory request above its limit** was refused by the API server, before any pod.

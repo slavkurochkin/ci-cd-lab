@@ -1,0 +1,51 @@
+# Runs loadgen.py once, in the api's own image: it has Python, and it is
+# already on the node, so nothing is pulled.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: loadgen
+  labels:
+    app.kubernetes.io/name: loadgen
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loadgen
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: loadgen
+          image: ci-cd-lab/api:local
+          imagePullPolicy: Never
+          command: ["python", "/loadgen/loadgen.py"]
+          env:
+            - name: TARGET
+              value: http://api/version
+            - name: DURATION
+              value: "60"
+            - name: CONCURRENCY
+              value: "4"
+          volumeMounts:
+            - name: loadgen
+              mountPath: /loadgen
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: loadgen
+          configMap:
+            name: loadgen

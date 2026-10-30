@@ -1,0 +1,87 @@
+"""Steady traffic against a Service, counting every failure. Project 12.
+
+Runs inside the cluster (see loadgen.yaml), so it goes through the Service
+the way another pod would, and nothing on the laptop is in the path.
+
+Each request opens a new connection on purpose. A kept-alive connection
+stays pinned to one pod, and a pod that is going away would only show up
+when that connection breaks. A new connection per request asks the Service
+for a pod every time, which is the question a rollout puts at risk.
+
+Environment:
+  TARGET       URL to request             (default http://api/version)
+  DURATION     seconds to run              (default 60)
+  CONCURRENCY  parallel clients            (default 4)
+"""
+
+import collections
+import json
+import os
+import threading
+import time
+import urllib.error
+import urllib.request
+
+TARGET = os.getenv("TARGET", "http://api/version")
+DURATION = float(os.getenv("DURATION", "60"))
+CONCURRENCY = int(os.getenv("CONCURRENCY", "4"))
+
+lock = threading.Lock()
+per_second: dict[int, collections.Counter] = collections.defaultdict(collections.Counter)
+first_errors: list[str] = []
+start = time.monotonic()
+
+
+def outcome(exc: BaseException | None, status: int | None) -> str:
+    if exc is None:
+        return "ok" if status and status < 500 else f"http_{status}"
+    if isinstance(exc, urllib.error.HTTPError):
+        return f"http_{exc.code}"
+    reason = getattr(exc, "reason", exc)
+    return type(reason).__name__
+
+
+def client() -> None:
+    while (now := time.monotonic() - start) < DURATION:
+        exc, status = None, None
+        try:
+            with urllib.request.urlopen(TARGET, timeout=3) as resp:
+                resp.read()
+                status = resp.status
+        except Exception as e:  # noqa: BLE001 - every failure is data here
+            exc = e
+        result = outcome(exc, status)
+        with lock:
+            per_second[int(now)][result] += 1
+            if result != "ok" and len(first_errors) < 10:
+                first_errors.append(f"t={now:6.2f}s {result}: {exc}")
+
+
+threads = [threading.Thread(target=client) for _ in range(CONCURRENCY)]
+for t in threads:
+    t.start()
+for t in threads:
+    t.join()
+
+total: collections.Counter = collections.Counter()
+for second in sorted(per_second):
+    counts = per_second[second]
+    total.update(counts)
+    failed = {k: v for k, v in counts.items() if k != "ok"}
+    if failed:
+        print(f"t={second:3d}s ok={counts['ok']:4d} failed={failed}")
+
+print("\n".join(first_errors))
+requests = sum(total.values())
+print(
+    json.dumps(
+        {
+            "target": TARGET,
+            "seconds": DURATION,
+            "concurrency": CONCURRENCY,
+            "requests": requests,
+            "failed": requests - total["ok"],
+            "outcomes": dict(total),
+        }
+    )
+)

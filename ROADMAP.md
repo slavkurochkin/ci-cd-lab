@@ -951,8 +951,8 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 9 | Terraform in CI | no lab yet — worked from this file, see [`docs/TERRAFORM-CI.md`](docs/TERRAFORM-CI.md) | **Done** |
 | B | Capstone — Reproducible Cloud Foundation | no lab — see [`docs/CAPSTONE-B.md`](docs/CAPSTONE-B.md) | **Done** |
 | 10 | Kubernetes Fundamentals | no lab yet — worked from this file, see [`k8s`](k8s) | **Done** |
-| 11 | Configuration & Packaging | no lab yet — see [`docs/CONFIG-AND-PACKAGING.md`](docs/CONFIG-AND-PACKAGING.md) | **Done** (readiness traffic count not completed) |
-| 12 | Rollouts, Failure & Forensics | — | Planned |
+| 11 | Configuration & Packaging | no lab yet — see [`docs/CONFIG-AND-PACKAGING.md`](docs/CONFIG-AND-PACKAGING.md) | **Done** |
+| 12 | Rollouts, Failure & Forensics | no lab yet — see [`docs/ROLLOUTS-AND-FORENSICS.md`](docs/ROLLOUTS-AND-FORENSICS.md) and [`k8s/broken`](k8s/broken) | **Done** |
 | 13 | Deploying from CI | — | Planned |
 | 14 | GitOps with Argo CD | — | Planned |
 | C | Capstone — The Delivery Platform | — | Planned |

@@ -1,0 +1,41 @@
+# Broken on purpose. Project 12, case 4.
+#
+#   kubectl apply -f k8s/broken/00-namespace.yaml -f k8s/broken/04-config.yaml
+#
+# Symptom: STATUS shows CreateContainerConfigError; the image is on the node and the ConfigMap exists.
+# Find the cause with kubectl before reading k8s/broken/README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config-7fdmd2d8bg
+  namespace: lab-broken
+data:
+  ENVIRONMENT: broken
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config
+  namespace: lab-broken
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: config}
+  template:
+    metadata:
+      labels: {app: config}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: api
+          image: ci-cd-lab/api:local
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: api-config
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {memory: 128Mi}

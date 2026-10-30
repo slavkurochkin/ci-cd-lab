@@ -1,0 +1,30 @@
+# Broken on purpose. Project 12, case 1.
+#
+#   kubectl apply -f k8s/broken/00-namespace.yaml -f k8s/broken/01-release.yaml
+#
+# Symptom: the new release never becomes ready; the pod's STATUS cycles between ErrImagePull and ImagePullBackOff.
+# Find the cause with kubectl before reading k8s/broken/README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: release
+  namespace: lab-broken
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: release}
+  template:
+    metadata:
+      labels: {app: release}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: api
+          image: ci-cd-lab/api:1.4.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {memory: 128Mi}

@@ -13,6 +13,13 @@ metadata:
     app.kubernetes.io/name: dynamodb
 spec:
   replicas: 1
+  # Project 12. Recreate: the old pod is gone before the new one starts.
+  # A rolling update would run two in-memory databases behind one Service
+  # for a few seconds, and orders written to the old one vanish with it.
+  # Anything that must run as exactly one copy (an RWO volume, a single
+  # writer) needs this, and pays for it with a short outage.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: dynamodb
