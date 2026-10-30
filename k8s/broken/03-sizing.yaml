@@ -1,0 +1,30 @@
+# Broken on purpose. Project 12, case 3.
+#
+#   kubectl apply -f k8s/broken/00-namespace.yaml -f k8s/broken/03-sizing.yaml
+#
+# Symptom: the pod stays Pending; no container is ever created and there are no logs.
+# Find the cause with kubectl before reading k8s/broken/README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sizing
+  namespace: lab-broken
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: sizing}
+  template:
+    metadata:
+      labels: {app: sizing}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: api
+          image: ci-cd-lab/api:local
+          imagePullPolicy: Never
+          resources:
+            requests: {cpu: 25m, memory: 64Gi}
+            limits: {memory: 64Gi}

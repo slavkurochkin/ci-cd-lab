@@ -8,6 +8,7 @@ kind: Kustomization
 resources:
   - api.yaml
   - dynamodb.yaml
+  - pdb.yaml
   - secrets.yaml
   - worker.yaml
 

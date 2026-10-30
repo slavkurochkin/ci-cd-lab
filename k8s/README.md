@@ -16,7 +16,7 @@ kubectl apply --server-side -k k8s/overlays/dev
 kubectl -n lab-dev rollout status deploy/api
 ```
 
-Since Project 11 the manifests live in `base/` with `overlays/dev` and `overlays/prod`, and need the platform from `platform/install.sh` (Vault, External Secrets, Reloader, metrics-server). The demos below were run on Project 10's flat manifests in a namespace called `lab`; [`docs/CONFIG-AND-PACKAGING.md`](../docs/CONFIG-AND-PACKAGING.md) is Project 11.
+Since Project 11 the manifests live in `base/` with `overlays/dev` and `overlays/prod`, and need the platform from `platform/install.sh` (Vault, External Secrets, Reloader, metrics-server). The demos below were run on Project 10's flat manifests in a namespace called `lab`; [`docs/CONFIG-AND-PACKAGING.md`](../docs/CONFIG-AND-PACKAGING.md) is Project 11, [`docs/ROLLOUTS-AND-FORENSICS.md`](../docs/ROLLOUTS-AND-FORENSICS.md) Project 12.
 
 `minikube stop` when you are done. It costs nothing in AWS, but it is a VM on your laptop.
 
@@ -28,6 +28,8 @@ Since Project 11 the manifests live in `base/` with `overlays/dev` and `overlays
 | `overlays/dev`, `overlays/prod` | Project 11: namespace, replicas, resources, config |
 | `chart/api` | Project 11: the same api as a Helm chart |
 | `platform/install.sh` | Project 11: what the manifests assume is installed |
+| `base/pdb.yaml`, `rollout/` | Project 12: the disruption budget; traffic and a step-by-step watcher for rollouts |
+| `broken/` | Project 12: five broken deployments, and how each was diagnosed |
 
 Everything below was run on minikube v1.38.1, Kubernetes v1.35.1, October 2026.
 
