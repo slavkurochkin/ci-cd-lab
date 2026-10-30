@@ -570,7 +570,7 @@ A second one, from the secrets half: every secrets system bottoms out in one cre
 
 ## Project 13 — Deploying from CI
 
-**Runs on:** EKS. ~$0.21/hr while up — `make eks-up` to start, `make eks-down` to stop. See [docs/COST.md](docs/COST.md).
+**Runs on:** EKS. ~$0.19/hr while up — `make eks-up` to start, `make eks-down` to stop. See [docs/COST.md](docs/COST.md).
 **Goal:** Get a workflow to deploy to a real cluster it cannot see, and only report success when the rollout has actually converged.
 
 ### Concepts
@@ -884,8 +884,8 @@ Signing without verification at admission is theatre. The enforcement point is t
 > | | |
 > |---|---|
 > | Two `/24` subnets | 502 usable IPs |
-> | `t3.medium` max pods | 3 ENIs × 6 IPs − 1 = 17 per node |
-> | Two nodes, less DaemonSets | **~28 schedulable pods** |
+> | `t3.small` max pods | 3 ENIs × (4 IPs − 1) + 2 = 11 per node |
+> | Two nodes, less coredns | **~20 schedulable pods** |
 >
 > The node ceiling binds roughly eighteen times harder than the address space.
 > Previews here run out of CPU and scheduling room, not IPs; a `Pending` pod on
@@ -953,7 +953,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 10 | Kubernetes Fundamentals | no lab yet — worked from this file, see [`k8s`](k8s) | **Done** |
 | 11 | Configuration & Packaging | no lab yet — see [`docs/CONFIG-AND-PACKAGING.md`](docs/CONFIG-AND-PACKAGING.md) | **Done** |
 | 12 | Rollouts, Failure & Forensics | no lab yet — see [`docs/ROLLOUTS-AND-FORENSICS.md`](docs/ROLLOUTS-AND-FORENSICS.md) and [`k8s/broken`](k8s/broken) | **Done** |
-| 13 | Deploying from CI | — | Planned |
+| 13 | Deploying from CI | no lab yet — see [`docs/DEPLOYING-FROM-CI.md`](docs/DEPLOYING-FROM-CI.md) | **Done** |
 | 14 | GitOps with Argo CD | — | Planned |
 | C | Capstone — The Delivery Platform | — | Planned |
 | 15 | Progressive Delivery | — | Planned |

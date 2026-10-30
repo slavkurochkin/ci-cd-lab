@@ -29,13 +29,14 @@ So one resource is now a deliberate exception, and the discipline moved from
 | Resource | Rate | Why it is now in scope |
 |---|---|---|
 | **EKS control plane** | $0.10/hr | The reachability problem in Project 13 is only real if the cluster is genuinely unreachable from a runner. |
-| **2 × `t3.medium` nodes** | $0.083/hr | Real nodes mean real scheduling, real evictions, and an actual `Pending` pod with an actual reason. |
-| **NLB** (from a `Service`) | $0.023/hr | Created by Kubernetes, not Terraform. Learning that it outlives its Service is half of Project 13's teardown lesson. |
+| **2 × `t3.small` nodes** | $0.042/hr | Real nodes mean real scheduling, real evictions, and an actual `Pending` pod with an actual reason. `t3.small`, not `t3.medium`: an account on AWS's free plan may only launch free-tier-eligible types (Project 13). |
+| **Public IPv4 addresses** | $0.005/hr each | Every node has one (no NAT), and so does the load balancer, in each subnet. About $0.02/hr in all. |
+| **Classic ELB** (from a `Service`) | $0.025/hr | Created by Kubernetes, not Terraform. Learning that it outlives its Service is half of Project 13's teardown lesson. |
 
-**About $0.21/hour, so about $4.50/day if you forget.**
+**About $0.15/hour, $0.19 while the load balancer exists, so about $4.50/day if you forget.**
 
-A four-hour session costs **$0.84**. Twelve sessions a month costs **$10**.
-A cluster left up for three weeks costs **$92** — that, and nothing else, is the
+A four-hour session costs about **$0.75**. Twelve sessions a month costs about **$9**.
+A cluster left up for three weeks costs about **$95** — that, and nothing else, is the
 failure mode this document exists to prevent. The hourly rate is not the risk.
 Forgetting is the risk.
 

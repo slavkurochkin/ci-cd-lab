@@ -125,7 +125,7 @@ Track B and Projects 13+ bill real money. `docs/COST.md` is the authority.
 **The rule: if a resource bills by the hour whether or not you use it, it does
 not outlive the session that created it.**
 
-- `make eks-up` creates the cluster (~$0.21/hr). `make eks-down` is the last
+- `make eks-up` creates the cluster (~$0.19/hr). `make eks-down` is the last
   command of every session — it deletes LoadBalancer Services first, then
   destroys, then sweeps for orphans.
 - Never use bare `terraform destroy` on `infra/eks`. Kubernetes-created ELBs
