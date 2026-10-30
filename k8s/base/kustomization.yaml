@@ -1,0 +1,25 @@
+# The base: everything both environments share. Project 11.
+#
+#   kubectl kustomize k8s/overlays/dev      # what dev gets
+#   kubectl apply --server-side -k k8s/overlays/dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - api.yaml
+  - dynamodb.yaml
+  - secrets.yaml
+  - worker.yaml
+
+# A generated ConfigMap gets a hash of its contents in its name, and every
+# reference to it is rewritten to match. Change one value and the name
+# changes, so the Deployment's pod template changes, so it rolls. A
+# hand-written ConfigMap can change underneath running pods that never
+# notice.
+configMapGenerator:
+  - name: api-config
+    literals:
+      - ENVIRONMENT=base
+      - AWS_REGION=us-east-1
+      - DYNAMODB_ENDPOINT=http://dynamodb:8000
+      - ORDERS_TABLE=orders

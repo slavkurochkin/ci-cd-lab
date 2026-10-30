@@ -119,6 +119,8 @@ kubectl get nodes
 
 `minikube stop` when you are not using it; it is a VM on your laptop and it is not free in battery.
 
+**`--memory` only applies when the cluster is first created.** On an existing profile it is ignored, and `minikube config get memory` (or `docker stats minikube`) shows what the cluster really has. With the Docker driver, minikube also shares Docker Desktop's VM with every other container you run. In Project 11 a 6 GiB minikube profile, next to 4.6 GiB of unrelated containers in a 7.65 GiB VM, ran the VM out of memory: the kernel killed Vault, then the API server restarted. Check `docker stats --no-stream` before starting anything heavy.
+
 ### Projects 13–14 run on EKS
 
 From Project 13 the cluster is real, because the lessons there — a runner that genuinely cannot reach it, pod identity, a load balancer that outlives its Service — have no local equivalent.

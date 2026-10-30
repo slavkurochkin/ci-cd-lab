@@ -1,4 +1,4 @@
-# Project 10: the worker as a Job, not a Deployment.
+# The worker as a Job, not a Deployment. Projects 10 and 11.
 #
 # The worker prints its build identity and exits 0. A Deployment exists to
 # keep a process running, so it restarts a container that exits, even
@@ -8,7 +8,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: worker
-  namespace: lab
   labels:
     app.kubernetes.io/name: worker
 spec:
@@ -34,9 +33,9 @@ spec:
         - name: worker
           image: ci-cd-lab/worker:local
           imagePullPolicy: Never
-          env:
-            - name: ENVIRONMENT
-              value: minikube
+          envFrom:
+            - configMapRef:
+                name: api-config
           resources:
             requests:
               cpu: 20m

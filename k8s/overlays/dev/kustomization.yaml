@@ -1,0 +1,37 @@
+# The dev overlay: the base, plus only what makes it dev. Project 11.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lab-dev
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+replicas:
+  - name: api
+    count: 1
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=dev
+
+# Dev takes test traffic only. The request covers the measured idle
+# floor (34Mi of anonymous memory); the limit leaves room for a burst.
+# No CPU limit: a CPU limit throttles a busy pod even when the node is idle.
+# A memory limit stays: without one, one pod can take the node's memory.
+patches:
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 160Mi

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["replicaCount", "image", "runAsUser", "config", "secrets", "resources", "probes"],
+  "properties": {
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 1, "not": { "const": "latest" } },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "runAsUser": { "type": "integer", "minimum": 1 },
+    "config": {
+      "type": "object",
+      "required": ["ENVIRONMENT", "ORDERS_TABLE"],
+      "additionalProperties": { "type": "string" }
+    },
+    "secrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "externalSecret"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "externalSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "storeName": { "type": "string" },
+            "key": { "type": "string" },
+            "refreshInterval": { "type": "string", "pattern": "^[0-9]+(s|m|h)$" }
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": { "type": "object", "required": ["cpu", "memory"] },
+        "limits": {
+          "type": "object",
+          "required": ["memory"],
+          "not": { "required": ["cpu"] }
+        }
+      }
+    },
+    "probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["readinessPath", "livenessPath"],
+      "properties": {
+        "readinessPath": { "type": "string", "pattern": "^/" },
+        "livenessPath": { "type": "string", "pattern": "^/" }
+      }
+    }
+  }
+}
