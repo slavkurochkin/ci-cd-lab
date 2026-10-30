@@ -66,6 +66,49 @@ persistent() {
   fi
 }
 
+# Capstone B: the environments CI manages. Every directory under infra/envs
+# whose terraform.tfvars does not say `enabled = false`.
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+live_envs=()
+for dir in "$SCRIPT_DIR"/../infra/envs/*/; do
+  [ -f "$dir/versions.tf" ] || continue
+  grep -Eq '^[[:space:]]*enabled[[:space:]]*=[[:space:]]*false' "$dir/terraform.tfvars" 2>/dev/null && continue
+  live_envs+=("$(basename "$dir")")
+done
+
+belongs_to_live_env() {
+  local name="$1" env
+  for env in ${live_envs[@]+"${live_envs[@]}"}; do
+    case "$name" in "ci-cd-lab-$env-api" | "ci-cd-lab-$env-orders") return 0 ;; esac
+  done
+  return 1
+}
+
+# Resources named for a live environment are expected. Anything else -- a
+# destroyed environment's leftovers, or something made by hand -- is a finding.
+# $1 = label, $2.. = command
+by_environment() {
+  local label="$1"; shift
+  local name expected="" unexpected=""
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if belongs_to_live_env "$name"; then expected+="$name"$'\n'; else unexpected+="$name"$'\n'; fi
+  done < <("$@" 2>/dev/null | tr '\t' '\n' | tr -d '\r')
+  if [ -z "$expected$unexpected" ]; then
+    printf '  %s✓%s %-26s none\n' "$GREEN" "$RESET" "$label"
+    return
+  fi
+  if [ -n "$expected" ]; then
+    printf '  %s✓%s %-26s %s%s%s\n' "$GREEN" "$RESET" "$label" "$DIM" "live environments, ~\$0 while idle" "$RESET"
+    printf '%s' "$expected" | while IFS= read -r name; do printf '      %s\n' "$name"; done
+  fi
+  if [ -n "$unexpected" ]; then
+    printf '  %s!%s %-26s %sno live environment owns these%s\n' "$RED" "$RESET" "$label" "$DIM" "$RESET"
+    printf '%s' "$unexpected" | while IFS= read -r name; do printf '      %s\n' "$name"; done
+    findings=$((findings + 1))
+  fi
+}
+
 # Same, but for resources that are legitimately up while you work a lab.
 # $1 = label, $2 = rough cost per day, $3.. = command
 meter() {
@@ -94,6 +137,8 @@ meter "Classic ELBs"       "0.55" aws elb describe-load-balancers --region "$REG
   --query 'LoadBalancerDescriptions[].LoadBalancerName' --output text
 meter "EBS volumes"        "0.03" aws ec2 describe-volumes --region "$REGION" \
   --query 'Volumes[].VolumeId' --output text
+# Backticks are JMESPath literals, not shell substitution.
+# shellcheck disable=SC2016
 meter "Unattached EIPs"    "0.12" aws ec2 describe-addresses --region "$REGION" \
   --query 'Addresses[?AssociationId==`null`].PublicIp' --output text
 
@@ -105,12 +150,12 @@ report "RDS instances"     aws rds describe-db-instances --region "$REGION" \
   --query 'DBInstances[].DBInstanceIdentifier' --output text
 
 echo
-echo "Free tier -- expected, but should be empty after a full teardown"
-report "Lambda functions"  aws lambda list-functions --region "$REGION" \
+echo "Environments -- created and destroyed by CI (live: ${live_envs[*]:-none})"
+by_environment "Lambda functions"  aws lambda list-functions --region "$REGION" \
   --query 'Functions[].FunctionName' --output text
-report "API Gateway APIs"  aws apigatewayv2 get-apis --region "$REGION" \
+by_environment "API Gateway APIs"  aws apigatewayv2 get-apis --region "$REGION" \
   --query 'Items[].Name' --output text
-report "DynamoDB tables"   aws dynamodb list-tables --region "$REGION" \
+by_environment "DynamoDB tables"   aws dynamodb list-tables --region "$REGION" \
   --query 'TableNames[]' --output text
 
 echo
