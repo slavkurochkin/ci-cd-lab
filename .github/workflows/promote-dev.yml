@@ -2,8 +2,8 @@
 #
 # Main CI (Lab 03) tests, scans and publishes every commit on main. When it
 # succeeds, this opens a pull request changing deploy/envs/dev to that
-# commit's digest, and turns on auto-merge. Argo CD notices the merge and
-# rolls dev out. Nothing here can reach the cluster: no AWS role, no
+# commit's digest, and turns on auto-merge. Its checks wait for one approval
+# (see below); then it merges, and Argo CD rolls dev out. Nothing here can reach the cluster: no AWS role, no
 # kubeconfig, no secret.
 #
 # Staging is promoted by a person, with a pull request copying dev's digest
@@ -38,7 +38,6 @@ jobs:
     permissions:
       contents: write # push the promotion branch
       pull-requests: write # open the pull request, enable auto-merge
-      actions: write # start the required checks on it
     env:
       FILE: deploy/envs/dev/kustomization.yaml
       IMAGE: slavkurochkin/ci-cd-lab/api
@@ -99,12 +98,14 @@ jobs:
             --body "Changes \`${FILE}\` to \`${DIGEST}\`, the image Lab 03 CI tested, scanned and published for ${SHA}. Argo CD rolls dev out when this merges. Opened by the Promote to dev workflow.")
           echo "opened ${url}"
 
-          # A pull request opened with GITHUB_TOKEN triggers no workflows, so
-          # the required checks (ci-passed, terraform-passed) would never
-          # report and auto-merge would wait forever. Start them by hand on
-          # the branch. Neither publishes or applies anything off main.
-          gh workflow run lab-03-ci.yml --ref "${branch}"
-          gh workflow run lab-09-terraform.yml --ref "${branch}"
-
+          # The pull request's own checks start, but GitHub holds them as
+          # "action_required" because a bot opened it: someone has to press
+          # "Approve and run" (or call the runs' /approve endpoint) before
+          # ci-passed and terraform-passed can report. Measured in Project 14.
+          # Starting them here with `gh workflow run` does not help: the
+          # api image job's ECR Public role does not trust workflow_dispatch
+          # on a branch, so that run fails and its ci-passed blocks the merge.
+          # A GitHub App token would remove the approval step; it is a secret
+          # to manage, so this repository keeps the click.
           gh pr merge "${url}" --auto --squash --delete-branch
-          echo "auto-merge enabled: merges when ci-passed and terraform-passed pass" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Opened ${url} with auto-merge. Its checks wait for approval: Actions → the held runs → Approve and run." >> "${GITHUB_STEP_SUMMARY}"
