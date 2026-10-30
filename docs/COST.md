@@ -50,6 +50,7 @@ and the rule for it is different.
 | **ECR repositories** | $0.10/GB/month | Years. The images Track C pulls are stored here. |
 | **IAM role and OIDC provider** | $0 | Years. |
 | **Terraform state bucket** (Project 7) | ~$0: a few dozen KB, plus $0.005 per 1,000 writes | Years. Every long-lived stack's state is in it. Never destroy it. |
+| **Each environment** (Capstone B): Lambda, HTTP API, DynamoDB on demand, logs (7 days), data bucket | ~$0 while idle: all bill per request. October 2026 to date: $0.0162 of usage for the whole account, covered by Free-plan credits. The API's throttle (5 rps) caps what anonymous traffic can cost | Until `enabled = false` in its tfvars. See `docs/CAPSTONE-B.md`. |
 
 ### What ECR actually costs here
 
