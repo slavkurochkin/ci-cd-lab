@@ -8,9 +8,9 @@ output "cluster_endpoint" {
   value       = aws_eks_cluster.lab.endpoint
 }
 
-output "ci_deploy_role_arn" {
-  description = "Set this as the `role-to-assume` in the deploy workflow. It is an ARN, not a credential -- it is safe in plain sight in the workflow file, which is the entire point of OIDC. Created by infra/ci-oidc; this stack only grants it cluster access."
-  value       = data.aws_iam_role.ci.arn
+output "deploy_role_arn" {
+  description = "Set as the repository variable AWS_EKS_DEPLOY_ROLE_ARN. An ARN, not a credential: OIDC means there is nothing secret to store."
+  value       = aws_iam_role.deploy.arn
 }
 
 output "api_service_account" {

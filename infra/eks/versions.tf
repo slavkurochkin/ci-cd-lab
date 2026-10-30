@@ -11,8 +11,8 @@ terraform {
   # Local state, still, after Project 7 moved the long-lived stacks to S3. The
   # cluster is recreated from scratch every session, so the blast radius of a
   # lost state file is one `make eks-down` run against a live account, and
-  # scripts/eks-down.sh handles that without Terraform's help. Project 13 is
-  # where CI applies this stack, and that is when it needs a shared backend.
+  # scripts/eks-down.sh handles that without Terraform's help. CI deploys to
+  # the cluster but never applies this stack, so nothing else needs the state.
 }
 
 provider "aws" {

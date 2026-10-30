@@ -22,6 +22,26 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fail() { printf '%sblocked:%s %s\n' "$RED" "$RESET" "$1" >&2; exit 1; }
 step() { printf '\n%s==>%s %s\n' "$GREEN" "$RESET" "$1"; }
 
+# Load balancers, classic and v2, tagged as belonging to an EKS cluster.
+# Printed as "<kind> <id>". Kubernetes' cloud provider tags every load
+# balancer it creates with kubernetes.io/cluster/<name>.
+cluster_lbs() {
+  local arn name
+  for arn in $(aws elbv2 describe-load-balancers --region "$REGION" \
+      --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null); do
+    aws elbv2 describe-tags --region "$REGION" --resource-arns "$arn" \
+      --query "TagDescriptions[0].Tags[?starts_with(Key, 'kubernetes.io/cluster/')].Key" \
+      --output text 2>/dev/null | grep -q . && echo "v2 $arn"
+  done
+  for name in $(aws elb describe-load-balancers --region "$REGION" \
+      --query 'LoadBalancerDescriptions[].LoadBalancerName' --output text 2>/dev/null); do
+    aws elb describe-tags --region "$REGION" --load-balancer-names "$name" \
+      --query "TagDescriptions[0].Tags[?starts_with(Key, 'kubernetes.io/cluster/')].Key" \
+      --output text 2>/dev/null | grep -q . && echo "classic $name"
+  done
+  return 0
+}
+
 command -v aws >/dev/null 2>&1 || fail "aws CLI not installed (brew install awscli)"
 aws sts get-caller-identity >/dev/null 2>&1 || fail "AWS credentials do not resolve"
 [ -n "$REGION" ] || fail "AWS_LAB_REGION is not set. Pin one region so there is one place to sweep."
@@ -62,8 +82,15 @@ if [ -n "$CLUSTERS" ] && command -v kubectl >/dev/null 2>&1; then
           echo "    deleting svc $ns/$name"
           kubectl delete svc "$name" -n "$ns" --timeout=120s >/dev/null 2>&1 || true
         done <<<"$svcs"
-        echo "    waiting 30s for AWS to detach the ENIs"
-        sleep 30
+        # The Service object goes at once; the load balancer behind it
+        # takes longer, and its ENIs hold the subnets until it is gone.
+        # Wait for AWS to say so instead of guessing how long that takes.
+        for _ in $(seq 1 30); do
+          left=$(cluster_lbs)
+          [ -z "$left" ] && { echo "    load balancers gone"; break; }
+          echo "    waiting for AWS to delete: $(awk '{print $2}' <<<"$left" | sed 's#.*/##' | tr '\n' ' ')"
+          sleep 10
+        done
       fi
     else
       printf '    %scould not reach the API server -- skipping, step 4 will catch the leftovers%s\n' "$DIM" "$RESET"
@@ -103,6 +130,29 @@ if [ -n "$CLUSTERS" ]; then
     echo "    gone"
   done <<<"$CLUSTERS"
 fi
+
+# --- 3b. Load balancers Kubernetes made that nothing deleted ---------------
+# Step 1 cannot reach a cluster that is half-deleted or whose kubeconfig is
+# gone, and Terraform never knew about these. Delete them by their tag.
+left=$(cluster_lbs)
+if [ -n "$left" ]; then
+  step "deleting load balancers left by Kubernetes"
+  while read -r kind id; do
+    echo "    $kind $id"
+    if [ "$kind" = v2 ]; then
+      aws elbv2 delete-load-balancer --region "$REGION" --load-balancer-arn "$id" || true
+    else
+      aws elb delete-load-balancer --region "$REGION" --load-balancer-name "$id" || true
+    fi
+  done <<<"$left"
+fi
+for sg in $(aws ec2 describe-security-groups --region "$REGION" \
+    --filters "Name=tag-key,Values=kubernetes.io/cluster/*" \
+    --query 'SecurityGroups[].GroupId' --output text 2>/dev/null); do
+  echo "    deleting security group $sg left by Kubernetes"
+  aws ec2 delete-security-group --region "$REGION" --group-id "$sg" >/dev/null 2>&1 || \
+    printf '    %scould not delete %s yet (still attached?)%s\n' "$YELLOW" "$sg" "$RESET"
+done
 
 # --- 4. Report what is still billing --------------------------------------
 step "sweeping for leftovers"

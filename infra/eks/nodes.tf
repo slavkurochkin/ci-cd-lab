@@ -31,6 +31,9 @@ resource "aws_eks_node_group" "default" {
   node_role_arn   = aws_iam_role.node.arn
   subnet_ids      = aws_subnet.public[*].id
 
+  # Amazon Linux 2 has no EKS AMI for Kubernetes 1.33 and later. Named here
+  # so the node group does not depend on the provider's default.
+  ami_type       = "AL2023_x86_64_STANDARD"
   instance_types = [var.node_instance_type]
   capacity_type  = "ON_DEMAND"
   disk_size      = 20

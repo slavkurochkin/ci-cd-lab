@@ -165,6 +165,9 @@ eks-up:
 	@./scripts/aws-guard.sh true
 	@cd infra/eks && terraform init -input=false && terraform apply -auto-approve
 	@aws eks update-kubeconfig --name lab --region $${AWS_LAB_REGION:-us-east-1}
+	@# The deploy role may edit one namespace and cannot create it, so the
+	@# cluster creator (you) does.
+	@kubectl create namespace lab --dry-run=client -o yaml | kubectl apply -f -
 	@echo ""
 	@echo "  Cluster up. It is billing now. End the session with: make eks-down"
 	@echo ""
