@@ -51,17 +51,18 @@ variable "vpc_cidr" {
   default     = "10.42.0.0/16"
 }
 
-variable "table_name" {
-  description = "DynamoDB table the API reads through Pod Identity. On-demand billing, inside the always-free tier."
+variable "table_prefix" {
+  description = "Each environment's DynamoDB table is <prefix>-<environment>. On-demand billing, inside the always-free tier."
   type        = string
   default     = "lab-orders"
 }
 
-variable "app_namespaces" {
+variable "environments" {
   description = <<-DESC
-    Namespaces the api runs in, one per environment. Argo CD creates them
-    (Project 14); Pod Identity binds the api's ServiceAccount in each.
+    One namespace (api-<env>), DynamoDB table and Pod Identity role per
+    environment. Argo CD creates the namespaces (Project 14); this stack
+    creates everything on the AWS side.
   DESC
   type        = list(string)
-  default     = ["api-dev", "api-staging"]
+  default     = ["dev", "staging", "prod"]
 }

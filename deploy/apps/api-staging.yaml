@@ -5,7 +5,7 @@ metadata:
   name: api-staging
   namespace: argocd
 spec:
-  project: default
+  project: api
   source:
     repoURL: https://github.com/slavkurochkin/ci-cd-lab.git
     targetRevision: main

@@ -87,6 +87,13 @@ jobs:
           git diff --exit-code --quiet "${FILE}" && { echo "::error::the digest line in ${FILE} was not found"; exit 1; }
           git diff "${FILE}"
 
+          # One open dev promotion at a time: an older one is now out of date,
+          # and merging it after this one would move dev backwards.
+          for old in $(gh pr list --state open --json number,headRefName \
+              --jq '.[] | select(.headRefName | startswith("promote/dev-")) | .number'); do
+            gh pr close "${old}" --delete-branch --comment "Superseded by the promotion of ${SHA:0:7}."
+          done
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "${branch}"
