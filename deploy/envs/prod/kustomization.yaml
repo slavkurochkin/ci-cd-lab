@@ -30,7 +30,7 @@ configMapGenerator:
       - ENVIRONMENT=prod
       # Capstone C: this environment's own table, reachable only with this
       # namespace's Pod Identity role (infra/eks/identity.tf).
-      - ORDERS_TABLE=lab-orders-prd
+      - ORDERS_TABLE=lab-orders-prod
 
 # No load balancer per environment: nothing outside the cluster calls the
 # api here, and each Classic ELB bills by the hour.
