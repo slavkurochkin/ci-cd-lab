@@ -66,7 +66,10 @@ def client() -> None:
         with lock:
             per_second[int(now)][result] += 1
             if build:
-                by_build[(build[:7], result)] += 1
+                # A commit SHA is shortened; a suffix ("-v2", "-bad") is kept,
+                # so builds of the same commit stay apart.
+                sha, _, suffix = build.partition("-")
+                by_build[(sha[:7] + (f"-{suffix}" if suffix else ""), result)] += 1
             if result != "ok" and len(first_errors) < 10:
                 first_errors.append(f"t={now:6.2f}s {result}: {exc}")
 
