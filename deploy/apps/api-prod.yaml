@@ -21,3 +21,8 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      # Delete what Git no longer has only after every wave has succeeded.
+      # Without it, a sync turned away by the pre-flight hook still pruned
+      # the previous ConfigMap that the running pods reference, and the next
+      # pod to restart failed with CreateContainerConfigError (Capstone C).
+      - PruneLast=true
