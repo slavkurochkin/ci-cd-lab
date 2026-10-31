@@ -5,8 +5,8 @@ import uuid
 from functools import lru_cache
 from typing import Annotated, Any, Protocol
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
+from fastapi import Depends, FastAPI, HTTPException, Path, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Info, generate_latest
 from pydantic import BaseModel, Field
 
 from api import __version__
@@ -20,6 +20,11 @@ app = FastAPI(title="lab-api", version=__version__)
 # (/orders/{order_id}), not the path: a label per order ID would grow without
 # bound.
 REQUESTS = Counter("api_requests_total", "HTTP requests served", ["method", "route", "status"])
+
+# Project 16. One series per running build, value 1: a dashboard marks a
+# deploy where a new git_sha appears, with nothing posted by the pipeline.
+BUILD = Info("api_build", "The build serving requests")
+BUILD.info({"git_sha": os.getenv("GIT_SHA", "unknown"), "version": __version__})
 
 
 @app.middleware("http")
@@ -137,8 +142,15 @@ def create_order(order: OrderIn, store: StoreDep) -> dict[str, Any]:
     return {"order_id": order_id, **breakdown}
 
 
+# Order IDs are 32 hex characters (uuid4().hex). Anything over 64 is not an
+# ID this service issued. Before Project 16 an ID over 2,048 bytes went to
+# DynamoDB, which rejects keys that long, and the client's mistake came back
+# as a 500: counted against the service's own error rate.
+OrderId = Annotated[str, Path(min_length=1, max_length=64)]
+
+
 @app.get("/orders/{order_id}")
-def get_order(order_id: str, store: StoreDep) -> dict[str, Any]:
+def get_order(order_id: OrderId, store: StoreDep) -> dict[str, Any]:
     found = store.get_order(order_id)
     if found is None:
         raise HTTPException(status_code=404, detail="order not found")

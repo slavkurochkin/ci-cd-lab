@@ -158,3 +158,18 @@ def test_metrics_count_requests_by_route_and_status():
     body = client.get("/metrics").text
     assert 'api_requests_total{method="GET",route="/healthz",status="200"}' in body
     assert 'route="unmatched",status="404"' in body
+
+
+def test_an_overlong_order_id_is_the_clients_error_not_ours():
+    from api.main import get_store
+
+    app.dependency_overrides[get_store] = FakeStore
+    try:
+        assert client.get("/orders/" + "x" * 64).status_code == 404
+        assert client.get("/orders/" + "x" * 2049).status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_metrics_name_the_running_build():
+    assert "api_build_info{" in client.get("/metrics").text

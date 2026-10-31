@@ -18,6 +18,7 @@ resources:
   - analysis.yaml
   - flags.yaml
   - prometheus.yaml
+  - grafana.yaml
 
 configurations:
   - rollout-transform.yaml
