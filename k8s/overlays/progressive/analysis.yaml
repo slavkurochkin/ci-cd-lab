@@ -1,0 +1,29 @@
+# What decides whether a canary continues. Project 15.
+#
+# The share of the canary's requests that failed with a 5xx, over the last
+# minute, measured on the canary's pods only: Argo Rollouts passes the new
+# ReplicaSet's pod-template hash, and Prometheus keeps it as a label.
+#
+# Comparing the canary with itself, not with the whole service: averaged with
+# four stable pods, a canary failing half its requests looks like 10%.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: error-rate
+spec:
+  args:
+    - name: canary-hash
+  metrics:
+    - name: error-rate
+      interval: 20s
+      # The second failed measurement aborts (failures above the limit). One could be a blip.
+      failureLimit: 1
+      # NaN: no requests yet in the window, which is not evidence of harm.
+      successCondition: isNaN(result[0]) || result[0] < 0.05
+      provider:
+        prometheus:
+          address: http://prometheus.lab-progressive.svc:9090
+          query: |
+            sum(rate(api_requests_total{rollouts_pod_template_hash="{{args.canary-hash}}",status=~"5.."}[1m]))
+            /
+            sum(rate(api_requests_total{rollouts_pod_template_hash="{{args.canary-hash}}"}[1m]))

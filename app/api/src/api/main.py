@@ -5,13 +5,34 @@ import uuid
 from functools import lru_cache
 from typing import Annotated, Any, Protocol
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from pydantic import BaseModel, Field
 
 from api import __version__
+from api.flags import Flags
 from api.orders import LineItem, price_order
 
 app = FastAPI(title="lab-api", version=__version__)
+
+# Project 15. One counter, labelled by route template and status, so a query
+# can ask "what share of this version's requests failed". The route template
+# (/orders/{order_id}), not the path: a label per order ID would grow without
+# bound.
+REQUESTS = Counter("api_requests_total", "HTTP requests served", ["method", "route", "status"])
+
+
+@app.middleware("http")
+async def record(request: Request, call_next):  # type: ignore[no-untyped-def]
+    response: Response = await call_next(request)
+    route = request.scope.get("route")
+    REQUESTS.labels(
+        request.method, getattr(route, "path", "unmatched"), str(response.status_code)
+    ).inc()
+    # Which build answered. A load test counts these to measure how much
+    # traffic a canary received.
+    response.headers["x-build"] = os.getenv("GIT_SHA", "unknown")
+    return response
 
 
 class LineItemIn(BaseModel):
@@ -45,6 +66,14 @@ def get_store() -> Store:
 StoreDep = Annotated[Store, Depends(get_store)]
 
 
+@lru_cache
+def get_flags() -> Flags:
+    return Flags()
+
+
+FlagsDep = Annotated[Flags, Depends(get_flags)]
+
+
 def _priced(order: OrderIn) -> dict[str, float]:
     items = [LineItem(sku=i.sku, quantity=i.quantity, unit_price=i.unit_price) for i in order.items]
     try:
@@ -73,6 +102,24 @@ def version() -> dict[str, str]:
         "git_sha": os.getenv("GIT_SHA", "unknown"),
         "environment": os.getenv("ENVIRONMENT", "local"),
     }
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    """Prometheus metrics. Argo Rollouts' analysis reads the error rate here."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.post("/orders/quote")
+def quote(order: OrderIn, flags: FlagsDep) -> dict[str, Any]:
+    """A price that is valid for 15 minutes. Behind the `quotes` flag (Project 15).
+
+    Deployed everywhere, released nowhere until the flag is on: with it off
+    the endpoint answers 404, as if it did not exist.
+    """
+    if not flags.enabled("quotes"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return {**_priced(order), "valid_for_seconds": 900}
 
 
 @app.post("/orders/price")
