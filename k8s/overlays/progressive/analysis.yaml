@@ -19,11 +19,19 @@ spec:
       # The second failed measurement aborts (failures above the limit). One could be a blip.
       failureLimit: 1
       # NaN: no requests yet in the window, which is not evidence of harm.
-      successCondition: isNaN(result[0]) || result[0] < 0.05
+      successCondition: isNaN(result) || result < 0.05
       provider:
         prometheus:
           address: http://prometheus.lab-progressive.svc:9090
+          # scalar() on both sides, and `or vector(0)` on the errors. In the
+          # canary's first seconds Prometheus has no series for its hash, and
+          # a plain sum() returns an empty result -- not NaN, not 0. The first
+          # version of this query did that: five "no data returned" errors in
+          # 40s, and a good release was aborted (Project 15).
+          #   no requests yet      -> NaN   (passes: nothing to judge)
+          #   requests, no errors  -> 0
+          #   requests and errors  -> the error share
           query: |
-            sum(rate(api_requests_total{rollouts_pod_template_hash="{{args.canary-hash}}",status=~"5.."}[1m]))
+            scalar(sum(rate(api_requests_total{rollouts_pod_template_hash="{{args.canary-hash}}",status=~"5.."}[1m])) or vector(0))
             /
-            sum(rate(api_requests_total{rollouts_pod_template_hash="{{args.canary-hash}}"}[1m]))
+            scalar(sum(rate(api_requests_total{rollouts_pod_template_hash="{{args.canary-hash}}"}[1m])))

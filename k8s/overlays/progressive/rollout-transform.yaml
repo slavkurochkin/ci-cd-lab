@@ -1,8 +1,12 @@
-# Teaches Kustomize where a Rollout keeps ConfigMap names and images, as it
-# already knows for a Deployment. Without it the generated ConfigMap gets a
+# Teaches Kustomize where a Rollout keeps ConfigMap names, as it already
+# knows for a Deployment. Without it the generated ConfigMap gets a
 # hashed name and the Rollout still asks for plain `api-config`: pods stuck
 # in CreateContainerConfigError. Paths from Argo Rollouts' own
 # docs/features/kustomize/rollout-transform.yaml, trimmed to what this uses.
+#
+# Not the docs' `images` entries: Kustomize's built-in image paths already
+# match any kind with spec/template/spec/containers, and the duplicates fail
+# with "conflicting fieldspecs" as soon as another kustomization wraps this one.
 nameReference:
   - kind: ConfigMap
     version: v1
@@ -13,8 +17,3 @@ nameReference:
         kind: Rollout
       - path: spec/template/spec/volumes/configMap/name
         kind: Rollout
-images:
-  - path: spec/template/spec/containers[]/image
-    kind: Rollout
-  - path: spec/template/spec/initContainers[]/image
-    kind: Rollout
