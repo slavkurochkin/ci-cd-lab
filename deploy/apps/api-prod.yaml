@@ -1,0 +1,23 @@
+# The api in prod. Project 14.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: api-prod
+  namespace: argocd
+spec:
+  project: api
+  source:
+    repoURL: https://github.com/slavkurochkin/ci-cd-lab.git
+    targetRevision: main
+    path: deploy/envs/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: api-prod
+  syncPolicy:
+    automated:
+      prune: true
+      # Put back anything changed in the cluster and not in Git.
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

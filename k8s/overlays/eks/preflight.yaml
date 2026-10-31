@@ -1,0 +1,110 @@
+# The gate before traffic. Project 14, Capstone C.
+#
+# An Argo CD Sync hook in wave -1: after the ServiceAccount and ConfigMap
+# (wave -2), before the Deployment (wave 0). It runs the NEW image -- the
+# images transformer pins this Job to the same digest as the Deployment --
+# with the NEW config, and checks, in order:
+#
+#   1. the table is ACTIVE with key order_id   (the stand-in for a migration)
+#   2. the app starts and answers /healthz
+#   3. /version reports a build identity and this environment's name
+#   4. an order can be written and read back  (Pod Identity, the real table)
+#
+# If any step fails the sync stops before wave 0, the Deployment is never
+# changed, and the old pods keep serving. A bad release is turned away
+# before it takes traffic, with nobody watching.
+#
+# Not a PreSync hook: PreSync runs before anything is applied, and on a new
+# namespace the ServiceAccount and ConfigMap this Job needs would not exist.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: preflight
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: preflight
+          image: ci-cd-lab/api:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: api-config
+          command:
+            - python
+            - -c
+            - |
+              import json, os, subprocess, sys, time, urllib.request as u
+              import boto3
+
+              def fail(msg):
+                  print(f"PREFLIGHT FAILED: {msg}", flush=True)
+                  sys.exit(1)
+
+              name, env = os.environ["ORDERS_TABLE"], os.environ["ENVIRONMENT"]
+              try:
+                  # The region the app uses (api/store.py). boto3 alone reads
+                  # AWS_DEFAULT_REGION, which only Pod Identity happens to set.
+                  ddb = boto3.client("dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+                  t = ddb.describe_table(TableName=name)["Table"]
+              except Exception as e:
+                  fail(f"table {name}: {e}")
+              keys = [k["AttributeName"] for k in t["KeySchema"]]
+              print(f"1. table {name}: status={t['TableStatus']} key={keys}", flush=True)
+              if t["TableStatus"] != "ACTIVE" or keys != ["order_id"]:
+                  fail(f"{name} must be ACTIVE with key ['order_id']")
+
+              app = subprocess.Popen(["uvicorn", "api.main:app", "--host", "127.0.0.1",
+                                      "--port", "8000", "--app-dir", "/app/src", "--log-level", "warning"])
+              base = "http://127.0.0.1:8000"
+              for _ in range(60):
+                  if app.poll() is not None:
+                      fail(f"the app exited with code {app.returncode} before answering")
+                  try:
+                      u.urlopen(base + "/healthz", timeout=1)
+                      break
+                  except Exception:
+                      time.sleep(0.5)
+              else:
+                  fail("the app did not answer /healthz within 30s")
+              print("2. /healthz answered", flush=True)
+
+              v = json.load(u.urlopen(base + "/version"))
+              print(f"3. /version {v}", flush=True)
+              if v.get("git_sha") in (None, "", "unknown"):
+                  fail("the image carries no build identity (GIT_SHA)")
+              if v.get("environment") != env:
+                  fail(f"the app reports environment {v.get('environment')!r}, expected {env!r}")
+
+              body = json.dumps({"items": [{"sku": "preflight", "quantity": 1, "unit_price": 1.0}]}).encode()
+              req = u.Request(base + "/orders", data=body, headers={"content-type": "application/json"})
+              try:
+                  created = json.load(u.urlopen(req))
+                  back = json.load(u.urlopen(f"{base}/orders/{created['order_id']}"))
+              except Exception as e:
+                  fail(f"order round trip: {e}")
+              if back.get("total") != created.get("total"):
+                  fail(f"order read back as {back}, written as {created}")
+              print(f"4. order {created['order_id']} written and read back", flush=True)
+              app.terminate()
+              print("preflight passed", flush=True)
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

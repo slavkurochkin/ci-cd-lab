@@ -1,0 +1,44 @@
+# The api in prod: what is running there is what this file says. Project 14.
+#
+# Argo CD (deploy/apps/api-prod.yaml) applies this directory and keeps the
+# cluster matching it. To change what runs in prod, change this file in a
+# pull request.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: api-prod
+
+resources:
+  - ../../../k8s/overlays/eks
+
+# The release. A digest, from GHCR: public, so the nodes pull it with no
+# credentials, and no account ID ends up in Git. Main CI publishes the same
+# digest to GHCR and ECR.
+images:
+  - name: ci-cd-lab/api
+    newName: ghcr.io/slavkurochkin/ci-cd-lab/api
+    digest: sha256:4cfbe4d82c036c663fe25aec837451529b6dba49a6e3f937b733117ca0adb17a
+
+replicas:
+  - name: api
+    count: 2
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=prod
+      # Capstone C: this environment's own table, reachable only with this
+      # namespace's Pod Identity role (infra/eks/identity.tf).
+      - ORDERS_TABLE=lab-orders-prod
+
+# No load balancer per environment: nothing outside the cluster calls the
+# api here, and each Classic ELB bills by the hour.
+patches:
+  - target:
+      kind: Service
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: ClusterIP

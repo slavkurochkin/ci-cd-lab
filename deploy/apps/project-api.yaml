@@ -1,0 +1,33 @@
+# What the api Applications may do. Capstone C.
+#
+# Argo CD itself runs in the `default` project, which may do anything. The
+# api's Applications run in this one: sources from this repository only,
+# destinations in the api-* namespaces only, and no cluster-scoped objects
+# except the Namespace that CreateNamespace makes. An environment file that
+# tried to create a ClusterRole, or deploy into kube-system, would fail to
+# sync instead of succeeding quietly.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: api
+  namespace: argocd
+  annotations:
+    # Before the Applications that name it (wave 0).
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: The api, one Application per environment
+  sourceRepos:
+    - https://github.com/slavkurochkin/ci-cd-lab.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: api-*
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Service}
+    - {group: "", kind: ServiceAccount}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}
+    - {group: policy, kind: PodDisruptionBudget}

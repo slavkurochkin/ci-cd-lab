@@ -6,14 +6,21 @@
 # credentials; the SDK inside the container picks them up with no configuration.
 # There is no key to rotate because there is no key.
 #
+# Capstone C: one table and one role per environment. A dev pod's
+# credentials can reach the dev table and nothing else, so a test in dev
+# cannot write to prod.
+#
 # This is the half a secrets manager cannot do for you. Vault (Project 11)
 # holds application secrets -- a third-party API key, a webhook URL. Put an AWS
 # access key in it and you have reintroduced exactly the long-lived credential
 # this file exists to delete, and now it lives in two places instead of one.
 
 resource "aws_dynamodb_table" "orders" {
-  name         = var.table_name
+  for_each = toset(var.environments)
+
+  name         = "${var.table_prefix}-${each.value}"
   billing_mode = "PAY_PER_REQUEST" # on-demand: no idle cost, inside the always-free tier
+
   # The key the app reads and writes (api/store.py). This was `pk` until
   # Project 13: every request would have failed with a ValidationException,
   # and only a test that wrote an order would have noticed.
@@ -26,7 +33,9 @@ resource "aws_dynamodb_table" "orders" {
 }
 
 resource "aws_iam_role" "api_pod" {
-  name = "${var.cluster_name}-api-pod"
+  for_each = toset(var.environments)
+
+  name = "${var.cluster_name}-api-${each.value}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -44,8 +53,10 @@ resource "aws_iam_role" "api_pod" {
 }
 
 resource "aws_iam_role_policy" "api_pod" {
+  for_each = toset(var.environments)
+
   name = "dynamodb-orders"
-  role = aws_iam_role.api_pod.id
+  role = aws_iam_role.api_pod[each.value].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -57,13 +68,14 @@ resource "aws_iam_role_policy" "api_pod" {
         "dynamodb:Query",
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
-        # Project 14: the pre-sync hook checks the table and its key before
-        # Argo CD rolls out a new version.
+        # The pre-flight hook checks the table and its key before Argo CD
+        # rolls out a new version (Project 14, Capstone C).
         "dynamodb:DescribeTable",
       ]
-      # One table, by ARN. Not "dynamodb:*" on "*", which is what this becomes
-      # the first time someone debugs a permissions error in a hurry.
-      Resource = aws_dynamodb_table.orders.arn
+      # This environment's table, by ARN. Not "dynamodb:*" on "*", which is
+      # what this becomes the first time someone debugs a permissions error
+      # in a hurry.
+      Resource = aws_dynamodb_table.orders[each.value].arn
     }]
   })
 }
@@ -74,13 +86,17 @@ resource "aws_iam_role_policy" "api_pod" {
 # error anywhere, just a pod with no credentials. Same failure shape as a
 # mistyped label selector, and diagnosed the same way: check what actually
 # matched, not what you meant to match.
+#
+# The namespaces are strings here and objects in Argo CD (it creates them).
+# Terraform owns the AWS side, Argo CD the cluster side; neither manages a
+# resource the other does.
 resource "aws_eks_pod_identity_association" "api" {
-  for_each = toset(var.app_namespaces)
+  for_each = toset(var.environments)
 
   cluster_name    = aws_eks_cluster.lab.name
-  namespace       = each.value
+  namespace       = "api-${each.value}"
   service_account = "api"
-  role_arn        = aws_iam_role.api_pod.arn
+  role_arn        = aws_iam_role.api_pod[each.value].arn
 
   depends_on = [aws_eks_addon.pod_identity]
 }

@@ -29,31 +29,31 @@ the failure each line prevents.
 | EKS control plane | `authentication_mode = "API"` | $0.10/hr |
 | Managed node group | 2 × `t3.small` (AL2023), fixed size; free-plan accounts cannot launch `t3.medium` | $0.042/hr |
 | Addons | vpc-cni, kube-proxy, coredns, **eks-pod-identity-agent** | $0 |
-| Deploy role (`lab-eks-deploy`) | Trusted only from the `eks` GitHub environment; `eks:DescribeCluster` plus Edit on namespace `lab`. The OIDC provider itself lives in `infra/ci-oidc` | $0 |
 | Public IPv4 | One per node (no NAT) | ~$0.01/hr |
-| Pod Identity association | ServiceAccount `api` → a DynamoDB role | $0 |
-| DynamoDB table | On-demand, always-free tier | $0 |
+| Pod Identity associations | ServiceAccount `api` in `api-dev`, `api-staging`, `api-prod`, each → its own role | $0 |
+| DynamoDB tables | `lab-orders-<env>`, one per environment, each reachable only by its role. On-demand, always-free tier | $0 |
 
 A `Service` of type LoadBalancer adds a Classic ELB, about $0.035/hr with its
 addresses. Terraform does not create it and does not know about it; see the
 teardown note below.
 
-`make eks-up` also creates the `lab` namespace. The deploy role may edit that
-namespace and cannot create it.
+The api's namespaces are created by Argo CD, not here (`make argocd-bootstrap`,
+Project 14). This stack owns the AWS side of each environment, and Argo CD
+the cluster side; neither manages a resource the other does.
 
-## The two identities, which are not the same thing
+## How a pod gets AWS credentials
 
-`identity.tf` is how a **pod** gets AWS credentials: EKS Pod Identity binds a
-ServiceAccount to an IAM role, and the agent hands the pod short-lived STS
-credentials. No key exists.
+`identity.tf`: EKS Pod Identity binds the `api` ServiceAccount in each
+`api-<env>` namespace to that environment's IAM role, and the agent hands the
+pod short-lived STS credentials. No key exists, and a dev pod's credentials
+reach only the dev table.
 
-`ci.tf` is how the **deploy job** gets them: GitHub OIDC into its own role,
-then a separate EKS access entry for authorization *inside* the cluster. Authentication and authorization
-are different resources here, and an IAM principal with no access entry
-authenticates perfectly and then gets `Unauthorized` from the API server.
+Until Project 14 a `ci.tf` here gave a CI deploy job its own role and an EKS
+access entry. With Argo CD pulling from Git, no CI job needs the cluster, and
+both were removed. They are in Git history (Project 13, `docs/DEPLOYING-FROM-CI.md`).
 
-Neither is a job for a secrets manager. Vault (Project 11) holds application
-secrets; putting an AWS key in it would undo both of these files.
+Not a job for a secrets manager. Vault (Project 11) holds application
+secrets; putting an AWS key in it would undo this file.
 
 ## Teardown
 

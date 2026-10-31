@@ -15,7 +15,7 @@ namespace: lab
 resources:
   - ../../base
   - serviceaccount.yaml
-  - table-check.yaml
+  - preflight.yaml
 
 replicas:
   - name: api
@@ -30,7 +30,7 @@ configMapGenerator:
       - ENVIRONMENT=eks
       - AWS_REGION=us-east-1
       - ORDERS_TABLE=lab-orders
-    # Project 14: applied before the table check (wave -1) needs it.
+    # Project 14: applied before the pre-flight hook (wave -1) reads it.
     options:
       annotations:
         argocd.argoproj.io/sync-wave: "-2"

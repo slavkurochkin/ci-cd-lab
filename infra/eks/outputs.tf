@@ -13,9 +13,9 @@ output "api_service_account" {
   value       = "api"
 }
 
-output "orders_table_name" {
-  description = "DynamoDB table the API reads through Pod Identity."
-  value       = aws_dynamodb_table.orders.name
+output "orders_tables" {
+  description = "Each environment's DynamoDB table, which its api pods reach through Pod Identity."
+  value       = { for env, t in aws_dynamodb_table.orders : env => t.name }
 }
 
 output "teardown" {

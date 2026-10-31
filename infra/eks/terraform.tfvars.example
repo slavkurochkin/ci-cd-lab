@@ -12,5 +12,5 @@
 # node_instance_type = "t3.small"    # ~$0.0208/hr each; free-plan accounts allow only free-tier-eligible types
 # node_count         = 2             # ~$0.042/hr total
 # vpc_cidr           = "10.42.0.0/16"
-# table_name         = "lab-orders"
-# app_namespaces     = ["api-dev", "api-staging"]
+# table_prefix       = "lab-orders"   # tables lab-orders-dev, -staging, -prod
+# environments       = ["dev", "staging", "prod"]
