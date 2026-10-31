@@ -12,6 +12,11 @@ Environment:
   TARGET       URL to request             (default http://api/version)
   DURATION     seconds to run              (default 60)
   CONCURRENCY  parallel clients            (default 4)
+  BODY         JSON to POST instead of a GET (Project 15)
+
+Project 15: when the response carries an x-build header (the commit that
+served it), outcomes are also counted per build, which measures how much of
+the traffic a canary received.
 """
 
 import collections
@@ -25,10 +30,12 @@ import urllib.request
 TARGET = os.getenv("TARGET", "http://api/version")
 DURATION = float(os.getenv("DURATION", "60"))
 CONCURRENCY = int(os.getenv("CONCURRENCY", "4"))
+BODY = os.getenv("BODY", "").encode() or None
 
 lock = threading.Lock()
 per_second: dict[int, collections.Counter] = collections.defaultdict(collections.Counter)
 first_errors: list[str] = []
+by_build: collections.Counter = collections.Counter()
 start = time.monotonic()
 
 
@@ -43,16 +50,23 @@ def outcome(exc: BaseException | None, status: int | None) -> str:
 
 def client() -> None:
     while (now := time.monotonic() - start) < DURATION:
-        exc, status = None, None
+        exc, status, build = None, None, None
+        request = urllib.request.Request(
+            TARGET, data=BODY, headers={"content-type": "application/json"} if BODY else {}
+        )
         try:
-            with urllib.request.urlopen(TARGET, timeout=3) as resp:
+            with urllib.request.urlopen(request, timeout=3) as resp:
                 resp.read()
                 status = resp.status
+                build = resp.headers.get("x-build")
         except Exception as e:  # noqa: BLE001 - every failure is data here
             exc = e
+            build = getattr(e, "headers", None) and e.headers.get("x-build")
         result = outcome(exc, status)
         with lock:
             per_second[int(now)][result] += 1
+            if build:
+                by_build[(build[:7], result)] += 1
             if result != "ok" and len(first_errors) < 10:
                 first_errors.append(f"t={now:6.2f}s {result}: {exc}")
 
@@ -82,6 +96,7 @@ print(
             "requests": requests,
             "failed": requests - total["ok"],
             "outcomes": dict(total),
+            "by_build": {f"{b} {r}": n for (b, r), n in sorted(by_build.items())},
         }
     )
 )

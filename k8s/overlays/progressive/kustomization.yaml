@@ -1,0 +1,63 @@
+# Project 15: the api as an Argo Rollout, with canary analysis on Prometheus
+# metrics and a feature flag in a ConfigMap.
+#
+#   ./k8s/platform/progressive.sh            # Argo Rollouts (once per cluster)
+#   kubectl apply --server-side -k k8s/overlays/progressive
+#
+# The base's Deployment is replaced by a Rollout; the base's Service selects
+# the Rollout's pods the same way.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lab-progressive
+
+resources:
+  - namespace.yaml
+  - ../../base
+  - rollout.yaml
+  - analysis.yaml
+  - flags.yaml
+  - prometheus.yaml
+
+configurations:
+  - rollout-transform.yaml
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=progressive
+
+patches:
+  # The Rollout runs the api instead.
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: api
+  - patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: worker
+  # No Vault here: DynamoDB Local accepts the app's default credentials.
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: api-secrets
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1
+      kind: SecretStore
+      metadata:
+        name: vault
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: api-secrets-reader

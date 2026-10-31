@@ -105,3 +105,56 @@ def test_get_store_builds_the_real_store_lazily(monkeypatch):
     store = main.get_store()
     assert store.table_name == "some-table"
     main.get_store.cache_clear()
+
+
+ORDER = {"items": [{"sku": "A", "quantity": 1, "unit_price": 10.0}]}
+
+
+class StaticFlags:
+    def __init__(self, **values):
+        self.values = values
+
+    def enabled(self, name):
+        return self.values.get(name, False)
+
+
+def test_quote_is_404_while_the_flag_is_off():
+    from api.main import get_flags
+
+    app.dependency_overrides[get_flags] = lambda: StaticFlags(quotes=False)
+    try:
+        assert client.post("/orders/quote", json=ORDER).status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_quote_answers_when_the_flag_is_on():
+    from api.main import get_flags
+
+    app.dependency_overrides[get_flags] = lambda: StaticFlags(quotes=True)
+    try:
+        response = client.post("/orders/quote", json=ORDER)
+        assert response.status_code == 200
+        assert response.json()["valid_for_seconds"] == 900
+        assert response.json()["total"] > 0
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_get_flags_is_a_shared_instance():
+    from api.main import get_flags
+
+    assert get_flags() is get_flags()
+
+
+def test_every_response_names_its_build(monkeypatch):
+    monkeypatch.setenv("GIT_SHA", "abc123")
+    assert client.get("/healthz").headers["x-build"] == "abc123"
+
+
+def test_metrics_count_requests_by_route_and_status():
+    client.get("/healthz")
+    client.get("/no/such/path")
+    body = client.get("/metrics").text
+    assert 'api_requests_total{method="GET",route="/healthz",status="200"}' in body
+    assert 'route="unmatched",status="404"' in body
