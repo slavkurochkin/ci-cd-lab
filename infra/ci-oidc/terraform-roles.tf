@@ -175,6 +175,15 @@ resource "aws_iam_role_policy" "tf_plan" {
         Action   = ["logs:DescribeLogGroups", "apigateway:GET"]
         Resource = ["*"]
       },
+      {
+        # Project 16: the error-budget gate reads the prod API's request and
+        # 5xx counts. CloudWatch metric reads have no resource-level scoping,
+        # and this action reads numbers, never logs or data.
+        Sid      = "ErrorBudgetReads"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricStatistics"]
+        Resource = ["*"]
+      },
     ]
   })
 }

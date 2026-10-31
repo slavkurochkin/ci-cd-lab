@@ -10,6 +10,9 @@ name: Terraform
 on:
   pull_request:
     branches: [main]
+    # labeled/unlabeled: the error-budget job reads the reliability-fix label,
+    # and adding it has to re-run the check.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
   workflow_dispatch:
@@ -302,9 +305,78 @@ jobs:
 
   # The required check. Same reason as ci-passed in Lab 02: a skipped job
   # reports nothing, and a required check that reports nothing blocks forever.
+  # Project 16. No change to prod while prod's error budget is spent, except
+  # a pull request labelled `reliability-fix`: the change that stops the
+  # failures has to be able to ship. Runs only when the prod plan has
+  # changes, on pull requests (through terraform-passed) and on main (before
+  # apply-prod, so a budget spent after the merge still holds the apply).
+  error-budget:
+    name: error-budget
+    needs: plan
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out the script
+      id-token: write # assume the read-only plan role
+      pull-requests: read # read the merged pull request's labels on main
+    steps:
+      - name: Does this change prod?
+        id: prod
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plan-text-prod
+          path: plan-prod
+
+      - name: Read the prod plan result
+        id: changes
+        run: |
+          changed=$(cat plan-prod/changes 2>/dev/null || echo false)
+          echo "prod plan has changes: ${changed}"
+          echo "changed=${changed}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check out the repository
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Assume the read-only plan role
+        if: steps.changes.outputs.changed == 'true'
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_TF_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: Check prod's error budget
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+        run: |
+          set +e
+          python3 scripts/error_budget.py --api-name ci-cd-lab-prod-api --slo 99 --days 7
+          code=$?
+          set -e
+          [ "${code}" -eq 0 ] && exit 0
+          [ "${code}" -eq 2 ] || { echo "::error::could not read the error budget (exit ${code})"; exit 1; }
+          labels="${PR_LABELS}"
+          if [ "${GITHUB_EVENT_NAME}" != pull_request ]; then
+            labels=$(gh api "repos/${REPO}/commits/${SHA}/pulls" --jq '[.[0].labels[]?.name] | join(" ")')
+          fi
+          if [[ " ${labels} " == *" reliability-fix "* ]]; then
+            echo "::warning::prod's error budget is spent; allowed because the pull request is labelled reliability-fix"
+            exit 0
+          fi
+          echo "::error::prod's error budget is spent. Prod changes are frozen until it recovers, except pull requests labelled reliability-fix."
+          exit 1
+
   terraform-passed:
     name: terraform-passed
-    needs: [changes, static, plan]
+    needs: [changes, static, plan, error-budget]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -419,10 +491,11 @@ jobs:
   # was nothing to apply, and never after a failed one.
   apply-prod:
     name: apply (prod)
-    needs: [gate, apply-nonprod]
+    needs: [gate, apply-nonprod, error-budget]
     if: >-
       always() && needs.gate.result == 'success' && needs.gate.outputs.prod == 'true'
       && (needs.apply-nonprod.result == 'success' || needs.apply-nonprod.result == 'skipped')
+      && needs.error-budget.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Required reviewer. The job waits here, and the prod apply role cannot be
