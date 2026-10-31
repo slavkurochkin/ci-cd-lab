@@ -70,13 +70,13 @@ scripts/            doctor, labctl, aws-guard, aws-sweep, eks-down, labcheck hel
 
 ## Progress
 
-Six graded labs are built (`labs/01`–`06`). Projects 7–14 and Capstones A and B were worked from the roadmap, each with a measured write-up in `docs/`; turning them into graded labs is separate work.
+Six graded labs are built (`labs/01`–`06`). Projects 7–14 and Capstones A–C were worked from the roadmap, each with a measured write-up in `docs/`; turning them into graded labs is separate work.
 
 | Track | Projects | Runs on | Status |
 |---|---|---|---|
 | A — Automation (GitHub Actions) | 1–5 + Capstone A | GitHub-hosted runners | Labs 01–05 built, Capstone A done |
 | B — Infrastructure (Terraform, AWS) | 6–9 + Capstone B | AWS free tier | Lab 06 written, Projects 7–9 and Capstone B done |
-| C — Orchestration (Kubernetes) | 10–14 + Capstone C | minikube (10–12), EKS (13–14) | Projects 10–14 done |
+| C — Orchestration (Kubernetes) | 10–14 + Capstone C | minikube (10–12), EKS (13–14) | Projects 10–14 and Capstone C done |
 | D — Delivery & Governance | 15–18 | Both | Planned |
 
 `make status` shows where you are.
