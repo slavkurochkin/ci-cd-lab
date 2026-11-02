@@ -142,10 +142,10 @@ A four-hour session costs about **$0.75**. A cluster you forget about costs **$4
 
 ## Track D (Projects 15–18)
 
-**Tools:** `trivy`, `cosign`, plus Prometheus and Grafana installed into minikube by the labs themselves.
+**Tools:** `trivy`, `cosign`, `kyverno` (the CLI, for `scripts/policy-check.sh`), plus Prometheus and Grafana installed into minikube by the labs themselves.
 
 ```bash
-brew install trivy cosign
+brew install trivy cosign kyverno
 ```
 
 ---

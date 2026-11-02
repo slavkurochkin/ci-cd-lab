@@ -48,4 +48,4 @@ spec:
         images.containers.map(image, verifyImageSignatures(image, [attestors.ci])).all(e, e > 0)
       message: >-
         image is not signed by this repository's CI (reusable-service-ci.yml on main or a v* tag);
-        only images built and signed by .github/workflows/lab-03-ci.yml can run here
+        sign it by building through that workflow (lab-03-ci.yml or publish.yml call it)

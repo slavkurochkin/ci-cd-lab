@@ -32,6 +32,8 @@ the failure each line prevents.
 | Public IPv4 | One per node (no NAT) | ~$0.01/hr |
 | Pod Identity associations | ServiceAccount `api` in `api-dev`, `api-staging`, `api-prod`, each → its own role | $0 |
 | DynamoDB tables | `lab-orders-<env>`, one per environment, each reachable only by its role. On-demand, always-free tier | $0 |
+| External Secrets roles | `lab-eso-controller` (Pod Identity) and `lab-secrets-reader`, which reads only `/ci-cd-lab/<namespace>/*` (`secrets.tf`) | $0 |
+| Permissions boundary | `lab-workload-boundary`, the most any pod role here can do | $0 |
 
 A `Service` of type LoadBalancer adds a Classic ELB, about $0.035/hr with its
 addresses. Terraform does not create it and does not know about it; see the
@@ -54,6 +56,19 @@ both were removed. They are in Git history (Project 13, `docs/DEPLOYING-FROM-CI.
 
 Not a job for a secrets manager. Vault (Project 11) holds application
 secrets; putting an AWS key in it would undo this file.
+
+## Secrets from SSM (Project 17)
+
+`secrets.tf`: External Secrets runs one controller for every namespace, so its
+role reads nothing itself. It assumes `lab-secrets-reader` with a session tag
+naming the namespace of the ExternalSecret it is serving, and that role reads
+only `/ci-cd-lab/<that namespace>/*`. An ExternalSecret in `api-dev` asking
+for prod's parameter gets AccessDenied. The values never pass through
+Terraform: `scripts/secret-store.sh` seeds them with `aws ssm put-parameter`,
+and the state file holds no secret. Measured in `docs/SUPPLY-CHAIN.md`.
+
+Pass `TF_VAR_node_count=3` when Kyverno and External Secrets run too: a
+`t3.small` takes 11 pods, and two nodes run out.
 
 ## Teardown
 
