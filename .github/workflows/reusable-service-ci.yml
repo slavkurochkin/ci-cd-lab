@@ -437,7 +437,12 @@ jobs:
   # one workflow file, in this repository, on main or a version tag.
   verify-signature:
     needs: image
-    if: inputs.publish
+    # always() and an explicit result check, for the reason the image job
+    # above gives: the worker has no integration suite, that job is skipped,
+    # and a skip propagates down the whole `needs` chain. With a plain
+    # `if: inputs.publish` the worker's image was signed and its signature
+    # never verified, and the run was green.
+    if: always() && inputs.publish && needs.image.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -457,4 +462,6 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity-regexp "^https://github\.com/${REPO}/\.github/workflows/reusable-service-ci\.yml@refs/(heads/main|tags/v.+)$" \
             > verified.json
-          jq '.[0].optional' verified.json || cat verified.json
+          # One entry per bundle that passed: the cosign signature and the
+          # GitHub provenance attestation, both signed by this workflow.
+          jq -c '.[] | .critical' verified.json || cat verified.json
