@@ -25,12 +25,16 @@ replicas:
 # Upstream sets no resource requests, which makes every Argo CD pod
 # BestEffort: first to be killed when a node runs short (Project 11 watched
 # that happen to Vault). Requests for the four that matter.
+#
+# The controller caches every resource type it can see. With Kyverno and
+# External Secrets installed (Project 17) it was OOMKilled six times at
+# 512Mi in eight minutes, and no sync finished.
 patches:
   - target: {kind: StatefulSet, name: argocd-application-controller}
     patch: |-
       - op: add
         path: /spec/template/spec/containers/0/resources
-        value: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}
+        value: {requests: {cpu: 100m, memory: 512Mi}, limits: {memory: 1Gi}}
   - target: {kind: Deployment, name: argocd-repo-server}
     patch: |-
       - op: add
