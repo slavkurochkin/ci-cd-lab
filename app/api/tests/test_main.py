@@ -173,3 +173,47 @@ def test_an_overlong_order_id_is_the_clients_error_not_ours():
 
 def test_metrics_name_the_running_build():
     assert "api_build_info{" in client.get("/metrics").text
+
+
+class StaticTokens:
+    def __init__(self, *tokens):
+        self.tokens = tokens
+
+    def configured(self):
+        return bool(self.tokens)
+
+    def valid(self, presented):
+        return presented in self.tokens
+
+
+def _admin(tokens, headers=None):
+    from api.main import get_tokens
+
+    app.dependency_overrides[get_tokens] = lambda: tokens
+    try:
+        return client.get("/admin/status", headers=headers or {})
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_admin_is_404_without_a_tokens_file():
+    assert _admin(StaticTokens(), {"Authorization": "Bearer x"}).status_code == 404
+
+
+def test_admin_rejects_missing_wrong_and_non_bearer_tokens():
+    tokens = StaticTokens("right")
+    assert _admin(tokens).status_code == 401
+    assert _admin(tokens, {"Authorization": "Bearer wrong"}).status_code == 401
+    assert _admin(tokens, {"Authorization": "Basic right"}).status_code == 401
+
+
+def test_admin_answers_a_valid_token():
+    response = _admin(StaticTokens("right"), {"Authorization": "Bearer right"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_get_tokens_is_a_shared_instance():
+    from api.main import get_tokens
+
+    assert get_tokens() is get_tokens()

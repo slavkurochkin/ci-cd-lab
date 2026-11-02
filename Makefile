@@ -12,7 +12,7 @@
 .PHONY: help doctor status labs lab verify verify-all reset solution \
         test test-integration lint fmt build-images run-api ci-local \
         aws-sweep eks-up eks-down eks-cost argocd-bootstrap \
-        platform-up where promote rollback clean
+        platform-up secret-store where promote rollback clean
 
 LAB ?=
 PYTEST := uv run pytest
@@ -177,12 +177,17 @@ argocd-bootstrap:
 # Capstone C. From an empty account to three reconciled environments: one
 # command, one wait. The cluster bills from here; end with `make eks-down`.
 platform-up: eks-up argocd-bootstrap
+	@./scripts/secret-store.sh
 	@echo "waiting for every Application to be Synced and Healthy ..."
-	@for app in root argocd api-dev api-staging api-prod; do \
+	@for app in kyverno external-secrets platform argocd api-dev api-staging api-prod root; do \
 		until [ "$$(kubectl -n argocd get application $$app -o jsonpath='{.status.sync.status}/{.status.health.status}' 2>/dev/null)" = "Synced/Healthy" ]; do sleep 5; done; \
 		echo "  $$app Synced/Healthy"; \
 	done
 	@./scripts/where.sh
+
+# Project 17. The SSM store and first tokens; platform-up runs it.
+secret-store:
+	@./scripts/secret-store.sh
 
 # What is where, and which commit put it there: from Git, GHCR and the cluster.
 where:

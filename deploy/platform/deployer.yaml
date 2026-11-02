@@ -1,0 +1,61 @@
+# The deploy identity: what a push-based pipeline, or a person with the
+# break-glass token, uses to change what runs. Project 17.
+#
+# It may read and change Deployments in dev and staging, and nothing else:
+# no Secrets, no Pods, no exec, no logs, nothing in prod. Prod changes only
+# through Git and Argo CD.
+#
+# "Update Deployments" is more than it sounds. A Deployment's pod template
+# can name any image, any command and any Secret in the namespace, so this
+# identity can run anything the admission policies allow. RBAC limits what
+# it can touch; the policies limit what it can run. Neither is enough alone.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: deployers
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployer
+  namespace: deployers
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: deployer
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+---
+# A ClusterRole used through RoleBindings: the rules are written once, and
+# each binding grants them in one namespace only. A ClusterRoleBinding would
+# grant them in every namespace, kube-system included.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer
+  namespace: api-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: deployer
+subjects:
+  - kind: ServiceAccount
+    name: deployer
+    namespace: deployers
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer
+  namespace: api-staging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: deployer
+subjects:
+  - kind: ServiceAccount
+    name: deployer
+    namespace: deployers

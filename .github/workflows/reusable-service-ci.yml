@@ -386,6 +386,28 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
+      # Project 17. A cosign signature on the digest, keyless: the job's OIDC
+      # token gets a 10-minute certificate from Sigstore's Fulcio naming this
+      # workflow, the signature goes into the public Rekor log, and nothing
+      # secret is stored anywhere. The attestation above says how the image
+      # was built; this is what the cluster's admission policy checks
+      # (deploy/policy/). cosign 3 stores it as a Sigstore bundle, an OCI
+      # referrer of the image, not a `sha256-<digest>.sig` tag.
+      - name: Install cosign
+        if: inputs.publish
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Sign the image
+        if: inputs.publish
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository }}/${{ inputs.service }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        # By digest. Signing a tag signs whatever the tag pointed at when
+        # cosign resolved it, which is not necessarily what was just pushed.
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
       - name: Report what was published
         if: inputs.publish
         # Values reach the shell through env, never interpolated into the
@@ -402,3 +424,37 @@ jobs:
           echo
           echo "Verify from anywhere:"
           echo "  gh attestation verify oci://${IMAGE}@${DIGEST} --repo ${REPO}"
+
+  # Project 17. Verification in its own job, with no write permission and no
+  # id-token: it checks the signature the way a stranger would, from the
+  # public registry and the public log. A signature nobody verifies changes
+  # nothing, and verifying in the signing job only proves the job can read
+  # back what it just wrote.
+  #
+  # The identity is the point. `cosign verify` with no identity flags is
+  # refused; with a loose one (`--certificate-identity-regexp '.*'`) any
+  # GitHub workflow anywhere passes, including one in a fork. This accepts
+  # one workflow file, in this repository, on main or a version tag.
+  verify-signature:
+    needs: image
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Verify the signature
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/${{ inputs.service }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          REPO: ${{ github.repository }}
+        run: |
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "^https://github\.com/${REPO}/\.github/workflows/reusable-service-ci\.yml@refs/(heads/main|tags/v.+)$" \
+            > verified.json
+          jq '.[0].optional' verified.json || cat verified.json

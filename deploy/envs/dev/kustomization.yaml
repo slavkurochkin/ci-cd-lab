@@ -42,3 +42,12 @@ patches:
       - op: replace
         path: /spec/type
         value: ClusterIP
+  # Project 17: this namespace's own parameter. Another namespace's path
+  # would be refused by AWS, not by anything here.
+  - target:
+      kind: ExternalSecret
+      name: admin-tokens
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: /ci-cd-lab/api-dev/admin-tokens

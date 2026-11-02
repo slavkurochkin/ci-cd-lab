@@ -1,0 +1,51 @@
+# Only images this repository's CI signed. Project 17.
+#
+# The signature is cosign's keyless one (.github/workflows/reusable-service-ci.yml):
+# a short-lived Fulcio certificate naming the workflow that signed, recorded
+# in the public Rekor log. "Signed" is not the check. Anyone can sign
+# anything; Kyverno's own images are signed. The check is who signed: this
+# one workflow file, in this repository, on main or a version tag.
+#
+# This policy only looks at images its glob matches. An image from anywhere
+# else is not checked here at all; pinned-own-images.yaml refuses those.
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: require-signed-images
+spec:
+  validationActions: [Deny]
+  webhookConfiguration:
+    # Verification calls GHCR and Rekor. If they are slow the pod is
+    # refused, not let through: the webhook fails closed.
+    timeoutSeconds: 20
+  matchConstraints:
+    namespaceSelector:
+      # The name label, which the API server sets and nobody can change.
+      # A label the namespace's owners chose themselves could be removed by
+      # them, and the policy with it.
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [api-dev, api-staging, api-prod]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  matchImageReferences:
+    - glob: "ghcr.io/slavkurochkin/ci-cd-lab/*"
+  attestors:
+    - name: ci
+      cosign:
+        keyless:
+          identities:
+            - issuer: https://token.actions.githubusercontent.com
+              subjectRegExp: '^https://github\.com/slavkurochkin/ci-cd-lab/\.github/workflows/reusable-service-ci\.yml@refs/(heads/main|tags/v.+)$'
+        ctlog:
+          url: https://rekor.sigstore.dev
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.ci])).all(e, e > 0)
+      message: >-
+        image is not signed by this repository's CI (reusable-service-ci.yml on main or a v* tag);
+        only images built and signed by .github/workflows/lab-03-ci.yml can run here
