@@ -5,13 +5,14 @@ import uuid
 from functools import lru_cache
 from typing import Annotated, Any, Protocol
 
-from fastapi import Depends, FastAPI, HTTPException, Path, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Path, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Info, generate_latest
 from pydantic import BaseModel, Field
 
 from api import __version__
 from api.flags import Flags
 from api.orders import LineItem, price_order
+from api.tokens import Tokens
 
 app = FastAPI(title="lab-api", version=__version__)
 
@@ -79,6 +80,14 @@ def get_flags() -> Flags:
 FlagsDep = Annotated[Flags, Depends(get_flags)]
 
 
+@lru_cache
+def get_tokens() -> Tokens:
+    return Tokens()
+
+
+TokensDep = Annotated[Tokens, Depends(get_tokens)]
+
+
 def _priced(order: OrderIn) -> dict[str, float]:
     items = [LineItem(sku=i.sku, quantity=i.quantity, unit_price=i.unit_price) for i in order.items]
     try:
@@ -113,6 +122,24 @@ def version() -> dict[str, str]:
 def metrics() -> Response:
     """Prometheus metrics. Argo Rollouts' analysis reads the error rate here."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/admin/status")
+def admin_status(
+    tokens: TokensDep, authorization: Annotated[str | None, Header()] = None
+) -> dict[str, str]:
+    """Behind a bearer token from a mounted Secret (Project 17).
+
+    No tokens file: 404, as if the route did not exist. A wrong or missing
+    token: 401. The token is re-read when the file changes, so rotating it in
+    SSM needs no restart.
+    """
+    if not tokens.configured():
+        raise HTTPException(status_code=404, detail="Not Found")
+    scheme, _, presented = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not tokens.valid(presented):
+        raise HTTPException(status_code=401, detail="invalid token")
+    return {"status": "ok", "environment": os.getenv("ENVIRONMENT", "local")}
 
 
 @app.post("/orders/quote")

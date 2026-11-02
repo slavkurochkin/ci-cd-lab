@@ -37,6 +37,10 @@ resource "aws_iam_role" "api_pod" {
 
   name = "${var.cluster_name}-api-${each.value}"
 
+  # Project 17: secrets.tf. Whatever is attached to this role later, it can
+  # never do more than the boundary allows.
+  permissions_boundary = aws_iam_policy.workload_boundary.arn
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

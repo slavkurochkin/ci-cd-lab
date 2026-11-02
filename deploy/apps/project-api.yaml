@@ -31,3 +31,7 @@ spec:
     - {group: apps, kind: Deployment}
     - {group: batch, kind: Job}
     - {group: policy, kind: PodDisruptionBudget}
+    # Project 17. ExternalSecret only: the store it reads through is the
+    # platform's (scripts/secret-store.sh). An Application that could create
+    # its own SecretStore could point it anywhere.
+    - {group: external-secrets.io, kind: ExternalSecret}

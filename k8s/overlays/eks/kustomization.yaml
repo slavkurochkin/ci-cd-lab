@@ -16,6 +16,7 @@ resources:
   - ../../base
   - serviceaccount.yaml
   - preflight.yaml
+  - admin-tokens.yaml
 
 replicas:
   - name: api
@@ -92,6 +93,25 @@ patches:
         value: IfNotPresent
       - op: remove
         path: /metadata/annotations/secret.reloader.stakater.com~1reload
+      # Project 17: the admin tokens as a file, not an environment variable.
+      # The kubelet rewrites a mounted Secret when it changes and the app
+      # re-reads it, so a rotation needs no restart. No subPath: a subPath
+      # mount is a copy made at start and is never updated. Optional, so a
+      # namespace whose parameter does not exist yet still starts, with the
+      # admin route answering 404.
+      - op: add
+        path: /spec/template/spec/volumes
+        value:
+          - name: admin-tokens
+            secret:
+              secretName: admin-tokens
+              optional: true
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts
+        value:
+          - name: admin-tokens
+            mountPath: /etc/admin
+            readOnly: true
 
   # Reachable from outside the cluster, so the workflow's smoke test can hit
   # it from a GitHub runner. This creates an AWS load balancer that Terraform

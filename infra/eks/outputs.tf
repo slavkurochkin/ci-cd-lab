@@ -22,3 +22,8 @@ output "teardown" {
   description = "How this stack is meant to end."
   value       = "make eks-down  # deletes LoadBalancer Services first, then destroys, then sweeps"
 }
+
+output "secrets_reader_role_arn" {
+  description = "The role External Secrets assumes to read /ci-cd-lab/<namespace>/* from SSM (Project 17). scripts/secret-store.sh puts it in the ClusterSecretStore, so the account ID stays out of Git."
+  value       = aws_iam_role.secrets_reader.arn
+}
