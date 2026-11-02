@@ -59,3 +59,13 @@ metadata: {name: digest-ci-never-built, namespace: api-dev}
 spec:
   securityContext: {runAsNonRoot: true}
   containers: [{name: k, image: "ghcr.io/slavkurochkin/ci-cd-lab/api@sha256:0000000000000000000000000000000000000000000000000000000000000000"}]
+---
+# Pushed with no signature and no attestation for Project 17's measurement,
+# then deleted. On the cluster it was refused as unsigned; now that the
+# manifest is gone it is refused as not found.
+apiVersion: v1
+kind: Pod
+metadata: {name: unsigned, namespace: api-dev}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers: [{name: api, image: "ghcr.io/slavkurochkin/ci-cd-lab/api@sha256:5c8b48ed0e272f0f1a2bdb4182dd2961f3a7a26d977c280137dc52d2b4809cc5"}]

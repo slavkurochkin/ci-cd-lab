@@ -73,12 +73,13 @@ resource "aws_iam_role" "secrets_reader" {
       Effect    = "Allow"
       Principal = { AWS = "arn:aws:iam::${local.account_id}:role/${var.cluster_name}-eso-controller" }
       Action    = ["sts:AssumeRole", "sts:TagSession"]
-      # No tag, no session: assumed without `esoNamespace` the policy below
-      # would resolve to /ci-cd-lab//*, which matches nothing, but refusing
-      # outright gives a clearer error.
-      Condition = {
-        StringLike = { "aws:RequestTag/esoNamespace" = "api-*" }
-      }
+      # No condition on the tag here. A first version required
+      # `aws:RequestTag/esoNamespace` to match api-*, and the store never
+      # became Ready: External Secrets validates a ClusterSecretStore by
+      # assuming the role outside any namespace, that call failed the
+      # condition, and every ExternalSecret then refused to sync. The policy
+      # below already reads only /ci-cd-lab/<tag>/*, and the store's
+      # namespaceRegexes decide which namespaces may use it at all.
     }]
   })
 }
