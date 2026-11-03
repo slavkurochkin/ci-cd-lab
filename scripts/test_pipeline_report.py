@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from pipeline_report import Job, Run, feedback, minutes_by_workflow, percentile
+from pipeline_report import Job, Run, feedback, minutes_by_workflow, percentile, runner_minutes_json
 
 T0 = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 
@@ -61,3 +61,9 @@ def test_feedback_skips_held_commits_and_pushes() -> None:
     ttf, _, held = feedback(runs)
     assert ttf == []
     assert held == 1
+
+
+def test_runner_minutes_json_matches_the_digest() -> None:
+    data = runner_minutes_json({"CI": (6.04, 2, 1.0), "TF": (3.0, 1, 0.0)}, 7, T0)
+    assert data == {"generated_at": "2026-11-03T12:00:00+00:00", "days": 7,
+                    "workflows": {"CI": 6.0, "TF": 3.0}, "total_minutes": 9.0, "runs": 3}

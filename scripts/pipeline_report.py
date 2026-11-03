@@ -3,6 +3,7 @@
 
     python3 scripts/pipeline_report.py              # last 30 days
     python3 scripts/pipeline_report.py --days 7
+    python3 scripts/pipeline_report.py --days 7 --json out.json   # for the cost digest
 
 Data: the Actions API (`gh api`), one call per run for its jobs.
 
@@ -35,6 +36,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 
 def ts(s: str | None) -> datetime | None:
@@ -133,6 +135,17 @@ def minutes_by_workflow(runs: list[Run]) -> dict[str, tuple[float, int, float]]:
     return {k: (v[0], int(v[1]), v[2]) for k, v in out.items()}
 
 
+def runner_minutes_json(rows: dict[str, tuple[float, int, float]], days: int, now: datetime) -> dict:
+    """The file infra/cost-report's digest reads."""
+    return {
+        "generated_at": now.isoformat(),
+        "days": days,
+        "workflows": {wf: round(m, 1) for wf, (m, _, _) in rows.items()},
+        "total_minutes": round(sum(m for m, _, _ in rows.values()), 1),
+        "runs": sum(n for _, n, _ in rows.values()),
+    }
+
+
 def feedback(runs: list[Run]) -> tuple[list[float], list[float], int]:
     """Per pull-request commit: time-to-feedback and queue-wait minutes, and commits held for approval."""
     by_sha: dict[str, list[Run]] = defaultdict(list)
@@ -168,6 +181,7 @@ def slowest_jobs(runs: list[Run], top: int = 8) -> list[tuple[str, float, float,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--days", type=int, default=30)
+    parser.add_argument("--json", type=Path, help="also write runner minutes by workflow here (infra/cost-report)")
     args = parser.parse_args()
     since = datetime.now(UTC) - timedelta(days=args.days)
     name = repo()
@@ -181,6 +195,8 @@ def main() -> int:
     for wf, (m, n, re) in sorted(rows.items(), key=lambda kv: -kv[1][0]):
         print(f"| {wf} | {n} | {m:.0f} | {m / total:.0%} | {re:.0f} |")
     print(f"| **total** | {len(runs)} | **{total:.0f}** | | {sum(r for _, _, r in rows.values()):.0f} |\n")
+    if args.json is not None:
+        args.json.write_text(json.dumps(runner_minutes_json(rows, args.days, datetime.now(UTC)), indent=2))
 
     ttf, queue, held = feedback(runs)
     if ttf:
