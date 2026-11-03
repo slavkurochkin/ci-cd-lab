@@ -1,0 +1,63 @@
+# Pipeline health: flaky tests and sharding, measured. Project 18.
+#
+# flaky       runs the api suite 20 times in shuffled order, weekly and when
+#             the detector changes, and fails if any test both passed and
+#             failed. It also checks the detector against a suite with three
+#             known flaky tests: it must find exactly those three.
+# shards-N    the same 12-second suite split across N runners, to measure what
+#             a runner costs in startup compared with what it saves. Runs only
+#             when the fixture or this file changes, or by hand.
+name: Pipeline health
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/flaky.py
+      - scripts/flaky_fixture/**
+      - scripts/shard_fixture/**
+      - .github/workflows/pipeline-health.yml
+
+permissions:
+  contents: read
+
+jobs:
+  flaky:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: The detector finds the three known flaky tests, and only those
+        run: |
+          set +e
+          python3 scripts/flaky.py --runs 30 --cwd scripts/flaky_fixture --quarantine found.txt -- \
+            uv run --no-project --with pytest --with pytest-randomly python -m pytest -q -p no:cacheprovider \
+            '--junitxml={junit}' test_known.py
+          set -e
+          diff <(sort scripts/flaky_fixture/quarantine.txt) <(sort found.txt)
+      - name: The api suite, 20 shuffled runs
+        run: |
+          python3 scripts/flaky.py --runs 20 --cwd app/api -- \
+            uv run --with pytest-randomly pytest -q -p no:cacheprovider --no-cov '--junitxml={junit}'
+
+  shards-1:
+    if: github.event_name != 'schedule'
+    uses: ./.github/workflows/pipeline-health-shard.yml
+    with: {total: 1, indexes: "[0]"}
+  shards-2:
+    if: github.event_name != 'schedule'
+    uses: ./.github/workflows/pipeline-health-shard.yml
+    with: {total: 2, indexes: "[0, 1]"}
+  shards-4:
+    if: github.event_name != 'schedule'
+    uses: ./.github/workflows/pipeline-health-shard.yml
+    with: {total: 4, indexes: "[0, 1, 2, 3]"}
+  shards-8:
+    if: github.event_name != 'schedule'
+    uses: ./.github/workflows/pipeline-health-shard.yml
+    with: {total: 8, indexes: "[0, 1, 2, 3, 4, 5, 6, 7]"}

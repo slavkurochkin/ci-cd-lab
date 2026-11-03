@@ -1,0 +1,42 @@
+# One sharded run of scripts/shard_fixture across `total` runners. Project 18.
+# Each runner collects the full list and takes every total-th test from its
+# own index, so the shards are disjoint and together cover the suite.
+name: Pipeline health shard
+
+on:
+  workflow_call:
+    inputs:
+      total:
+        type: number
+        required: true
+      indexes:
+        description: JSON list 0..total-1 (expressions have no range())
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  shard:
+    name: shard ${{ matrix.index }}/${{ inputs.total }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        index: ${{ fromJSON(inputs.indexes) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Run this shard
+        working-directory: scripts/shard_fixture
+        env:
+          INDEX: ${{ matrix.index }}
+          TOTAL: ${{ inputs.total }}
+        run: |
+          uv run --no-project --with pytest python -m pytest -p no:cacheprovider --collect-only -q | grep '::' > all.txt
+          awk -v i="$INDEX" -v n="$TOTAL" '(NR - 1) % n == i' all.txt > mine.txt
+          echo "$(wc -l < mine.txt) of $(wc -l < all.txt) tests"
+          xargs -a mine.txt bash -c 'uv run --no-project --with pytest python -m pytest -q -p no:cacheprovider "$@"' _
