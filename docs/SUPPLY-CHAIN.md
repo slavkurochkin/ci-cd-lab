@@ -16,7 +16,7 @@ Decide at admission what may run, not in review. Project 17: CI signs every imag
 TF_VAR_node_count=3 make platform-up         # EKS + Argo CD + Kyverno + External Secrets
 ```
 
-Run November 2, 2026: GitHub Actions, Kyverno 1.19.1 and External Secrets 2.13.0 on EKS 1.35, three `t3.small` nodes.
+Run November 2–3, 2026, in two cluster sessions: GitHub Actions, Kyverno 1.19.1 and External Secrets 2.13.0 on EKS 1.35, three `t3.small` nodes.
 
 ---
 
@@ -26,7 +26,7 @@ Run November 2, 2026: GitHub Actions, Kyverno 1.19.1 and External Secrets 2.13.0
 |---|---|
 | An unsigned image is rejected at admission with a clear message | **Met.** An image pushed with no signature was refused for cluster admin and for the deploy identity: `image is not signed by this repository's CI`. The same pod with a signed digest was admitted. |
 | The deploy ServiceAccount cannot read Secrets or create Pods directly | **Met.** 13 `can-i` checks: only `patch deployments` in dev and staging is allowed. Reading a Secret and creating a Pod were refused for real. |
-| Rotating a value in SSM updates the pod without a redeploy | **Not measured yet.** The secret store never became Ready on the cluster (see the last section), so the api pods never started. The fix is in this change and is applied at the next session. |
+| Rotating a value in SSM updates the pod without a redeploy | **Met** (second session). A new token was accepted **28s** after `put-parameter`, and the old one refused **75s** after it was removed, by the same pod with 0 restarts. |
 
 ---
 
@@ -102,19 +102,47 @@ RBAC alone is not enough. A server dry-run, as the deployer, added a volume from
 
 The api reads its admin tokens from the mounted Secret file on each request, rereading when the file changes. An environment variable would be read once, at start.
 
-What happened on the cluster: the store stayed `InvalidProviderConfig`. External Secrets validates a ClusterSecretStore by assuming the reader role outside any namespace, and the first trust policy required `esoNamespace` to match `api-*`:
+Measured in the second session, against the dev api through `kubectl port-forward`:
 
 ```
-AccessDenied: ... assumed-role/lab-eso-controller/... is not authorized to perform:
-sts:TagSession on resource: arn:aws:iam::<account>:role/lab-secrets-reader
+before          pod api-8666c5d9df-wsbnn restarts=0
+                old token 200, wrong token 401, no header 401
+overlap         SSM value "old\nnew": new token accepted after 28s, old still 200
+retire          SSM value "new": old token refused after 75s, new 200
+after           pod api-8666c5d9df-wsbnn restarts=0
 ```
 
-Every ExternalSecret then refused with `ClusterSecretStore "ssm" is not ready`, Argo CD held the api Deployments behind them, and no api pod started. The condition is removed in this change; the read policy and the store's namespace list still do the isolation. Applying it needed a Terraform apply during the session that was not available, so the rotation, the cross-namespace AccessDenied and the boundary test wait for the next session.
+The delay is two intervals added together: the ExternalSecret's `refreshInterval` (30s) and the kubelet's sync of mounted Secrets (up to about a minute). The overlap step is what keeps a rotation from being an outage: clients move to the new token while both work.
+
+Isolation, from the same session:
+
+```
+ExternalSecret in api-dev asking for /ci-cd-lab/api-prod/admin-tokens:
+  AccessDeniedException: assumed-role/lab-secrets-reader/... is not authorized to perform
+  ssm:GetParameter on resource: .../parameter/ci-cd-lab/api-prod/admin-tokens
+ExternalSecret in namespace p17-other:
+  using cluster store "ssm" is not allowed from namespace "p17-other": denied by spec.condition
+```
+
+**The first session's store never became Ready.** External Secrets validates a ClusterSecretStore by assuming the reader role outside any namespace, and the first trust policy required `esoNamespace` to match `api-*`. That call failed with `not authorized to perform: sts:TagSession`, every ExternalSecret refused with `ClusterSecretStore "ssm" is not ready`, and Argo CD held the api Deployments behind them. The condition is gone; the read policy and the store's namespace list do the isolation.
+
+**The permissions boundary had a hole.** With an inline policy allowing `iam:ListRoles` and `ssm:GetParameter` on `*` attached to `lab-api-dev`, a dev pod got `no permissions boundary allows the iam:ListRoles action`, as intended, and then read prod's token. The boundary allowed all of `/ci-cd-lab/*` because the secrets reader needs SSM. Its SSM statement now uses the same namespace tag, and the IAM policy simulator (`aws iam simulate-custom-policy`, with `ssm:GetParameter` on `*` as the identity policy) gives:
+
+```
+api pod role, no tag, api-prod parameter       implicitDeny
+api pod role, no tag, api-dev parameter        implicitDeny
+reader tagged api-dev, api-dev parameter       allowed
+reader tagged api-dev, api-prod parameter      implicitDeny
+iam:ListRoles                                  implicitDeny
+```
+
+The fixed boundary is checked by the simulator, not yet on a cluster.
 
 | | How it happens | What goes wrong | What you see |
 |---|---|---|---|
 | **One role for every namespace** | the controller's own role reads `/ci-cd-lab/*` | an ExternalSecret in dev asks for prod's key | prod's token in a dev Secret, synced without an error |
 | **Validation outside a namespace** | a trust condition on the namespace tag | the store's own check fails it | `InvalidProviderConfig`, then every ExternalSecret `not ready` |
+| **A boundary wider than the roles** | one boundary shared by every pod role, sized for the most powerful | any role later given more gets up to the boundary | a dev pod reads prod's token after someone attaches a broad policy |
 | **Secret as environment variable** | `envFrom` a synced Secret | the value is read once at start | the Secret changes and the pod keeps the old token until it restarts |
 
 > Further reading: [External Secrets: AWS Parameter Store](https://external-secrets.io/latest/provider/aws-parameter-store/)
@@ -124,8 +152,9 @@ Every ExternalSecret then refused with `ClusterSecretStore "ssm" is not ready`, 
 ## What went wrong while building this
 
 - **Nothing was refused by the first rejection test.** The "unsigned" image carried a provenance attestation, which counts as a signature.
-- **The secret store never became Ready**, for the reason above. It cost the rotation measurement.
+- **The secret store never became Ready** in the first session, for the reason above. Rotation waited for a second session. Applying the fix mid-session with `terraform apply` was blocked by the permission check; the next `make eks-up` applied it.
+- **Argo CD's controller was OOMKilled six times** at 512Mi once Kyverno and External Secrets were installed, so no sync finished. A live patch to 1Gi was reverted by Argo CD within a minute (it manages itself); the limit went through Git in #108.
 - **`make platform-up` stopped at once** without `AWS_LAB_REGION`, and **`make eks-down` stopped** at its region confirmation when run without a terminal (`echo us-east-1 | make eks-down`). Neither created or deleted anything.
 - **The policy message named one workflow** (`lab-03-ci.yml`) when `publish.yml` signs through the same reusable workflow. Reworded.
 - **Two nodes were not enough.** Kyverno and External Secrets add pods past the 22 two `t3.small` nodes hold; the session ran three.
-- **Cluster time**: `make platform-up` started 21:49 UTC, `make aws-sweep` printed `Account is clean.` at 22:24. About 35 minutes at about $0.21/hr, roughly $0.12 of credit.
+- **Cluster time**: `make platform-up` started 21:49 UTC, `make aws-sweep` printed `Account is clean.` at 22:24. About 35 minutes. The second session ran 23:28 to 00:04 UTC, about 36 minutes, also ending with `Account is clean.`. Together about $0.25 of credit at about $0.21/hr.

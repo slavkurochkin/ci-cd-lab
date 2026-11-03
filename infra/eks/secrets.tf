@@ -123,10 +123,15 @@ resource "aws_iam_policy" "workload_boundary" {
         Resource = "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${var.table_prefix}-*"
       },
       {
+        # The namespace tag again, not /ci-cd-lab/*. The first version
+        # allowed the whole prefix, and with `ssm:GetParameter` on `*`
+        # attached to lab-api-dev a dev pod read prod's token. Only the
+        # secrets reader's sessions carry the tag; for every other role
+        # this statement matches nothing.
         Sid      = "LabParameters"
         Effect   = "Allow"
         Action   = ["ssm:GetParameter", "ssm:GetParameters"]
-        Resource = "arn:aws:ssm:${local.region}:${local.account_id}:parameter/ci-cd-lab/*"
+        Resource = "arn:aws:ssm:${local.region}:${local.account_id}:parameter/ci-cd-lab/$${aws:PrincipalTag/esoNamespace}/*"
       },
       {
         Sid      = "SecretsReader"
