@@ -4,6 +4,8 @@
 #             the detector changes, and fails if any test both passed and
 #             failed. It also checks the detector against a suite with three
 #             known flaky tests: it must find exactly those three.
+# runner-minutes  weekly: runner minutes by workflow for the last 7 days,
+#             written to S3 for infra/cost-report's Monday Slack digest.
 # shards-N    the same 12-second suite split across N runners, to measure what
 #             a runner costs in startup compared with what it saves. Runs only
 #             when the fixture or this file changes, or by hand.
@@ -20,6 +22,7 @@ on:
       - scripts/dora.py
       - scripts/error_budget.py
       - scripts/test_*.py
+      - infra/cost-report/lambda/**
       - scripts/flaky_fixture/**
       - scripts/shard_fixture/**
       - .github/workflows/pipeline-health.yml
@@ -39,6 +42,9 @@ jobs:
       - name: Tests of the report scripts' arithmetic
         working-directory: scripts
         run: uv run --no-project --with pytest python -m pytest -q -p no:cacheprovider -c /dev/null --rootdir . test_pipeline_report.py test_delivery_metrics.py
+      - name: Tests of the cost digest
+        working-directory: infra/cost-report/lambda
+        run: uv run --no-project --with pytest python -m pytest -q -p no:cacheprovider -c /dev/null --rootdir . test_cost_report.py
       - name: The detector finds the three known flaky tests, and only those
         run: |
           set +e
@@ -51,6 +57,31 @@ jobs:
         run: |
           python3 scripts/flaky.py --runs 20 --cwd app/api -- \
             uv run --extra dev --with pytest-randomly pytest -q -p no:cacheprovider --no-cov '--junitxml={junit}'
+
+  # Runs on main only (the schedule, or by hand): the CI role trusts main and
+  # v* tags, not pull requests. 06:17 UTC, before the digest at 08:00.
+  runner-minutes:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Runner minutes, last 7 days
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/pipeline_report.py --days 7 --json runner-minutes.json
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Hand them to the cost digest
+        run: aws s3 cp runner-minutes.json "s3://ci-cd-lab-artifacts-$(aws sts get-caller-identity --query Account --output text)/pipeline/runner-minutes.json"
 
   shards-1:
     if: github.event_name != 'schedule'

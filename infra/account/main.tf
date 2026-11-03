@@ -33,6 +33,14 @@ module "artifacts" {
 #
 #   terraform import aws_budgets_budget.monthly <account-id>:ci-cd-lab-monthly
 
+# Since Project 18 each notification also goes to SNS, and from there to Slack
+# through infra/cost-report's Lambda. The email stays: the alert path should
+# not depend on the thing it might be alerting about. The topic is created by
+# infra/cost-report, so apply that first.
+locals {
+  budget_alerts_topic = "arn:aws:sns:us-east-1:${data.aws_caller_identity.current.account_id}:ci-cd-lab-budget-alerts"
+}
+
 resource "aws_budgets_budget" "monthly" {
   name         = "ci-cd-lab-monthly"
   budget_type  = "COST"
@@ -48,6 +56,7 @@ resource "aws_budgets_budget" "monthly" {
     threshold_type             = "PERCENTAGE"
     notification_type          = "FORECASTED"
     subscriber_email_addresses = [var.budget_email]
+    subscriber_sns_topic_arns  = [local.budget_alerts_topic]
   }
 
   # And once on actual spend, because a forecast can be wrong in both
@@ -58,5 +67,6 @@ resource "aws_budgets_budget" "monthly" {
     threshold_type             = "PERCENTAGE"
     notification_type          = "ACTUAL"
     subscriber_email_addresses = [var.budget_email]
+    subscriber_sns_topic_arns  = [local.budget_alerts_topic]
   }
 }
