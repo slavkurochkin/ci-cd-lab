@@ -43,7 +43,7 @@ jobs:
       - name: The api suite, 20 shuffled runs
         run: |
           python3 scripts/flaky.py --runs 20 --cwd app/api -- \
-            uv run --with pytest-randomly pytest -q -p no:cacheprovider --no-cov '--junitxml={junit}'
+            uv run --extra dev --with pytest-randomly pytest -q -p no:cacheprovider --no-cov '--junitxml={junit}'
 
   shards-1:
     if: github.event_name != 'schedule'

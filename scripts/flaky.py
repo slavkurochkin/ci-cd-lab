@@ -7,7 +7,7 @@ run writes JUnit XML, and a test that passed in some runs and failed in
 others is reported with its failure rate.
 
     python3 scripts/flaky.py --runs 20 --cwd app/api -- \\
-        uv run --with pytest-randomly pytest -q -p randomly --junitxml={junit}
+        uv run --extra dev --with pytest-randomly pytest -q --no-cov --junitxml={junit}
 
     python3 scripts/flaky.py --runs 20 --cwd app/worker -- \\
         npx vitest run --sequence.shuffle --reporter=junit --outputFile={junit}
@@ -92,10 +92,12 @@ def main() -> int:
             junit = Path(tmp) / f"run-{i}.xml"
             cmd = [c.replace("{junit}", str(junit)) for c in command]
             env = {**os.environ, "FLAKY_DETECT": "1"}
-            code = subprocess.run(cmd, cwd=args.cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
+            proc = subprocess.run(cmd, cwd=args.cwd, env=env, capture_output=True, text=True)
+            code = proc.returncode
             red += code != 0
             if not junit.exists():
                 print(f"run {i}: no JUnit file (exit {code}); is the command right?", file=sys.stderr)
+                print((proc.stdout + proc.stderr)[-2000:], file=sys.stderr)
                 return 2
             runs.append(outcomes(junit))
     elapsed = time.monotonic() - started
