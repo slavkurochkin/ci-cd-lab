@@ -1,6 +1,6 @@
 # Pipeline health: flaky tests and sharding, measured. Project 18.
 #
-# flaky       runs the api suite 20 times in shuffled order, weekly and when
+# flaky       tests the report scripts' arithmetic, then runs the api suite 20 times in shuffled order, weekly and when
 #             the detector changes, and fails if any test both passed and
 #             failed. It also checks the detector against a suite with three
 #             known flaky tests: it must find exactly those three.
@@ -16,6 +16,10 @@ on:
   pull_request:
     paths:
       - scripts/flaky.py
+      - scripts/pipeline_report.py
+      - scripts/dora.py
+      - scripts/error_budget.py
+      - scripts/test_*.py
       - scripts/flaky_fixture/**
       - scripts/shard_fixture/**
       - .github/workflows/pipeline-health.yml
@@ -32,6 +36,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Tests of the report scripts' arithmetic
+        working-directory: scripts
+        run: uv run --no-project --with pytest python -m pytest -q -p no:cacheprovider -c /dev/null --rootdir . test_pipeline_report.py test_delivery_metrics.py
       - name: The detector finds the three known flaky tests, and only those
         run: |
           set +e
