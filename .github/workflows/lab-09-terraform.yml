@@ -114,15 +114,23 @@ jobs:
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff infra
 
+      # The six directories in parallel (Project 18). In series this step was
+      # 47s of the job's ~95, and p95 of the slowest pull-request job. The
+      # time is not the provider download (a shared TF_PLUGIN_CACHE_DIR was
+      # tried and changed nothing on a runner), it is starting the AWS
+      # provider and loading its schema, about 8s per directory, on one CPU
+      # of four. Output is buffered per directory so the logs stay readable.
       - name: terraform validate
         run: |
           set -euo pipefail
-          for dir in infra/envs/*/ infra/modules/*/; do
-            echo "::group::$dir"
-            terraform -chdir="$dir" init -backend=false >/dev/null
-            terraform -chdir="$dir" validate
-            echo "::endgroup::"
-          done
+          validate() {
+            out=$( { terraform -chdir="$1" init -backend=false -input=false >/dev/null && terraform -chdir="$1" validate -no-color; } 2>&1 )
+            code=$?
+            printf '::group::%s (exit %s)\n%s\n::endgroup::\n' "$1" "$code" "$out"
+            return "$code"
+          }
+          export -f validate
+          printf '%s\n' infra/envs/*/ infra/modules/*/ | xargs -P 4 -I{} bash -c 'validate "$@"' _ {}
 
       - name: tflint
         run: |
