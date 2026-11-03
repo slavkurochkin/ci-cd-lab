@@ -14,7 +14,9 @@ others is reported with its failure rate.
 
 `{junit}` is replaced with a fresh path for each run. With --quarantine FILE
 the flaky test ids are written there (one per line); a suite's conftest can
-then mark them as non-blocking. Exit 1 when any test is flaky.
+then mark them as non-blocking. Each run gets FLAKY_DETECT=1, which a
+quarantine must honour by switching itself off: a quarantined test still
+has to be measured. Exit 1 when any test is flaky.
 
 What you'll learn: which tests are flaky, measured, instead of by reputation.
 Run: about runs x suite time, $0.
@@ -23,6 +25,7 @@ Run: about runs x suite time, $0.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import tempfile
@@ -88,7 +91,8 @@ def main() -> int:
         for i in range(args.runs):
             junit = Path(tmp) / f"run-{i}.xml"
             cmd = [c.replace("{junit}", str(junit)) for c in command]
-            code = subprocess.run(cmd, cwd=args.cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
+            env = {**os.environ, "FLAKY_DETECT": "1"}
+            code = subprocess.run(cmd, cwd=args.cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
             red += code != 0
             if not junit.exists():
                 print(f"run {i}: no JUnit file (exit {code}); is the command right?", file=sys.stderr)

@@ -36,7 +36,7 @@ jobs:
           INDEX: ${{ matrix.index }}
           TOTAL: ${{ inputs.total }}
         run: |
-          uv run --no-project --with pytest python -m pytest -p no:cacheprovider --collect-only -q | grep '::' > all.txt
+          uv run --no-project --with pytest python -m pytest -p no:cacheprovider -c /dev/null --rootdir . --collect-only -q | grep '::' > all.txt
           awk -v i="$INDEX" -v n="$TOTAL" '(NR - 1) % n == i' all.txt > mine.txt
           echo "$(wc -l < mine.txt) of $(wc -l < all.txt) tests"
-          xargs -a mine.txt bash -c 'uv run --no-project --with pytest python -m pytest -q -p no:cacheprovider "$@"' _
+          xargs -a mine.txt bash -c 'uv run --no-project --with pytest python -m pytest -q -p no:cacheprovider -c /dev/null --rootdir . "$@"' _
