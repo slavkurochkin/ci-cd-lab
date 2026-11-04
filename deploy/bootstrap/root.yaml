@@ -1,0 +1,25 @@
+# The one Application applied by hand. Project 14.
+#
+# It points Argo CD at deploy/apps, and every file there is another
+# Application: Argo CD itself, and the api once per environment. Adding an
+# environment is a file in deploy/apps, merged to main. This is the
+# app-of-apps pattern.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/slavkurochkin/ci-cd-lab.git
+    targetRevision: main
+    path: deploy/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # Delete an Application whose file was deleted from Git.
+      prune: true
+      selfHeal: true

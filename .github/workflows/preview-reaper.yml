@@ -1,0 +1,58 @@
+# Removes the `preview` label from pull requests that have had it too long.
+# Project 18.
+#
+# `pull_request: closed` covers a merge and an abandoned pull request that
+# someone closes. It does not cover one that sits open for three weeks, and
+# its preview would run for all three. Removing the label is enough: Argo
+# CD's ApplicationSet stops matching the pull request and deletes the preview.
+#
+# The images are deleted here, not left to preview.yml's `unlabeled` job:
+# a label removed with GITHUB_TOKEN does not trigger other workflows.
+name: Preview reaper
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: Remove previews labelled longer ago than this
+        default: "72"
+
+permissions:
+  contents: read
+
+jobs:
+  reap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+      issues: write
+      packages: write
+    steps:
+      - name: Reap old previews
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          MAX_AGE_HOURS: ${{ inputs.max_age_hours || '72' }}
+        run: |
+          set -euo pipefail
+          now=$(date +%s)
+          for n in $(gh pr list --repo "$REPO" --label preview --state open --json number --jq '.[].number'); do
+            # When the label was last added: the newest `labeled` event for it.
+            labelled=$(gh api "repos/${REPO}/issues/${n}/events" --paginate \
+              --jq '[.[] | select(.event == "labeled" and .label.name == "preview") | .created_at] | last')
+            age_h=$(( (now - $(date -d "$labelled" +%s)) / 3600 ))
+            if [ "$age_h" -lt "$MAX_AGE_HOURS" ]; then
+              echo "#${n}: labelled ${age_h}h ago, kept"
+              continue
+            fi
+            gh pr edit "$n" --repo "$REPO" --remove-label preview
+            gh pr comment "$n" --repo "$REPO" --body "Preview removed: labelled ${age_h}h ago, over the ${MAX_AGE_HOURS}h limit. Add the \`preview\` label again to bring it back."
+            ids=$(gh api "/users/${OWNER}/packages/container/ci-cd-lab%2Fapi/versions" --paginate \
+              --jq ".[] | select((.metadata.container.tags | length) > 0 and all(.metadata.container.tags[]; startswith(\"pr-${n}-\"))) | .id")
+            for id in $ids; do gh api -X DELETE "/users/${OWNER}/packages/container/ci-cd-lab%2Fapi/versions/${id}"; done
+            echo "#${n}: labelled ${age_h}h ago, reaped ($(echo "$ids" | wc -w) image versions deleted)"
+          done

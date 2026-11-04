@@ -1,0 +1,53 @@
+# The api in dev: what is running there is what this file says. Project 14.
+#
+# Argo CD (deploy/apps/api-dev.yaml) applies this directory and keeps the
+# cluster matching it. To change what runs in dev, change this file in a
+# pull request.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: api-dev
+
+resources:
+  - ../../../k8s/overlays/eks
+
+# The release. A digest, from GHCR: public, so the nodes pull it with no
+# credentials, and no account ID ends up in Git. Main CI publishes the same
+# digest to GHCR and ECR.
+images:
+  - name: ci-cd-lab/api
+    newName: ghcr.io/slavkurochkin/ci-cd-lab/api
+    digest: sha256:a0d0623a0ab080816ed2182fa04b6cd6b0407a1fedd326bdff6e711d6b8a0a30
+
+replicas:
+  - name: api
+    count: 1
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=dev
+      # Capstone C: this environment's own table, reachable only with this
+      # namespace's Pod Identity role (infra/eks/identity.tf).
+      - ORDERS_TABLE=lab-orders-dev
+
+# No load balancer per environment: nothing outside the cluster calls the
+# api here, and each Classic ELB bills by the hour.
+patches:
+  - target:
+      kind: Service
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: ClusterIP
+  # Project 17: this namespace's own parameter. Another namespace's path
+  # would be refused by AWS, not by anything here.
+  - target:
+      kind: ExternalSecret
+      name: admin-tokens
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: /ci-cd-lab/api-dev/admin-tokens

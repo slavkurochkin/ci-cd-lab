@@ -1,0 +1,10 @@
+# Owned by the preview's Application, so deleting the Application (the pull
+# request closed, or lost its `preview` label) deletes the namespace and
+# everything in it. A namespace made by CreateNamespace=true would outlive
+# its Application: Argo CD never deletes those.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: preview
+  labels:
+    ci-cd-lab/preview: "true"

@@ -1,0 +1,36 @@
+# The cluster's rules: admission policies and the deploy identity's RBAC.
+# Project 17.
+#
+# The `default` project, not `api`: the api's Applications may not create
+# policies or Roles, or an environment file could switch off the rules that
+# apply to it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/slavkurochkin/ci-cd-lab.git
+    targetRevision: main
+    path: deploy/platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # The policy kinds do not exist until Kyverno's CRDs do.
+      - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

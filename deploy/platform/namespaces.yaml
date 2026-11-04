@@ -1,0 +1,20 @@
+# The api's namespaces, created by the platform. Project 17.
+#
+# deployer.yaml binds Roles inside them, and the platform syncs (wave -2)
+# before the api Applications that used to create them (wave 0, with
+# CreateNamespace). Without these, the RoleBindings fail, the platform never
+# becomes Healthy, and the root waits for it forever.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: api-dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: api-staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: api-prod

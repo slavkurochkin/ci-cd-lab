@@ -1,0 +1,75 @@
+# Argo CD itself, from Git. Project 14.
+#
+# Applied once by hand (`make argocd-bootstrap`), and from then on by Argo CD:
+# deploy/apps/argocd.yaml points it at this directory, so an upgrade is a
+# pull request that changes the version below.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - namespace.yaml
+  # Pinned to a release, never `stable`: `stable` moves, and a cluster rebuilt
+  # next month would get a different Argo CD from the one this was tested on.
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.6/manifests/install.yaml
+
+# Single sign-on and notifications are not used here; that is two pods fewer
+# on two 2 GiB nodes.
+replicas:
+  - name: argocd-dex-server
+    count: 0
+  - name: argocd-notifications-controller
+    count: 0
+
+# Upstream sets no resource requests, which makes every Argo CD pod
+# BestEffort: first to be killed when a node runs short (Project 11 watched
+# that happen to Vault). Requests for the four that matter.
+#
+# The controller caches every resource type it can see. With Kyverno and
+# External Secrets installed (Project 17) it was OOMKilled six times at
+# 512Mi in eight minutes, and no sync finished.
+patches:
+  - target: {kind: StatefulSet, name: argocd-application-controller}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 100m, memory: 512Mi}, limits: {memory: 1Gi}}
+  - target: {kind: Deployment, name: argocd-repo-server}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 384Mi}}
+  - target: {kind: Deployment, name: argocd-server}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 25m, memory: 64Mi}, limits: {memory: 256Mi}}
+  - target: {kind: Deployment, name: argocd-redis}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 25m, memory: 32Mi}, limits: {memory: 128Mi}}
+
+  # Project 17. Argo CD (since 1.8) treats a child Application as healthy as
+  # soon as it exists, so sync waves in deploy/apps ordered only the
+  # creation of the Applications, not their readiness. The api (wave 0)
+  # could start before Kyverno (wave -3) was admitting anything, and the
+  # first pods would get in unchecked. With this health check the root waits
+  # for each wave's Applications to be Healthy before the next.
+  - target: {kind: ConfigMap, name: argocd-cm}
+    patch: |-
+      - op: add
+        path: /data
+        value:
+          resource.customizations.health.argoproj.io_Application: |
+            hs = {}
+            hs.status = "Progressing"
+            hs.message = ""
+            if obj.status ~= nil and obj.status.health ~= nil then
+              hs.status = obj.status.health.status
+              if obj.status.health.message ~= nil then
+                hs.message = obj.status.health.message
+              end
+            end
+            return hs

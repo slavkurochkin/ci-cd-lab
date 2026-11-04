@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.10"
 
   required_providers {
     aws = {
@@ -8,16 +8,17 @@ terraform {
     }
   }
 
-  # Local state, like infra/eks. Remote state is Project 8's subject.
+  # State lives in S3 since Project 7. Lose it and the next apply fails
+  # with EntityAlreadyExists, because the OIDC provider is still there.
+  # The bucket name is in ../backend.hcl:
   #
-  # The stakes are different here, though. infra/eks can lose its state safely
-  # because `make eks-down` finds and deletes resources without Terraform's
-  # help. This stack has no such fallback: lose the state and Terraform will
-  # try to create an OIDC provider that already exists and fail with
-  # EntityAlreadyExists. The recovery is `terraform import`, not a sweep.
-  #
-  # That asymmetry is the argument for remote state, and you now have a
-  # concrete example of it rather than a general principle.
+  #   terraform init -backend-config=../backend.hcl
+  backend "s3" {
+    key          = "ci-oidc/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {

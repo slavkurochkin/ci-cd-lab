@@ -11,15 +11,32 @@ variable "cluster_name" {
 }
 
 variable "kubernetes_version" {
-  description = "EKS control plane version."
+  description = <<-DESC
+    EKS control plane version. Keep it in standard support: a version past its
+    standard-support date moves to extended support, which bills the control
+    plane at $0.60/hr instead of $0.10, with no other change. 1.31 was the
+    default here until Project 13 found it already in extended support.
+    Check with `aws eks describe-cluster-versions`.
+  DESC
   type        = string
-  default     = "1.31"
+  default     = "1.35"
 }
 
 variable "node_instance_type" {
-  description = "Node size. t3.medium is the smallest that comfortably runs the addons plus both services."
+  description = <<-DESC
+    Node size. t3.small: 2 vCPU, 2 GiB, up to 11 pods (3 ENIs x 4 IPs). The
+    system pods that use pod IPs are coredns and little else, so that is room
+    for the api with plenty to spare.
+
+    It was t3.medium. An account on AWS's free plan may only launch
+    free-tier-eligible types, and the node group sat in CREATING for 25
+    minutes while every launch failed with "The specified instance type is
+    not eligible for Free Tier" -- visible only in the Auto Scaling group's
+    activity history, not in the node group's health. List the allowed types:
+      aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true
+  DESC
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "node_count" {
@@ -28,34 +45,24 @@ variable "node_count" {
   default     = 2
 }
 
-variable "github_repo" {
-  description = "owner/repo allowed to assume the CI deploy role. This is the only thing standing between your cluster and any other repository on GitHub -- do not widen it to a wildcard owner."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$", var.github_repo))
-    error_message = "github_repo must be exactly owner/repo, with no wildcard and no leading https://github.com/."
-  }
-}
-
 variable "vpc_cidr" {
   description = "CIDR for the lab VPC."
   type        = string
   default     = "10.42.0.0/16"
 }
 
-variable "table_name" {
-  description = "DynamoDB table the API reads through Pod Identity. On-demand billing, inside the always-free tier."
+variable "table_prefix" {
+  description = "Each environment's DynamoDB table is <prefix>-<environment>. On-demand billing, inside the always-free tier."
   type        = string
   default     = "lab-orders"
 }
 
-variable "ci_role_name" {
+variable "environments" {
   description = <<-DESC
-    Name of the CI role created by infra/ci-oidc. This stack looks it up and
-    attaches cluster-scoped permissions to it; it does not create it. Apply
-    infra/ci-oidc first or the data lookup fails.
+    One namespace (api-<env>), DynamoDB table and Pod Identity role per
+    environment. Argo CD creates the namespaces (Project 14); this stack
+    creates everything on the AWS side.
   DESC
-  type        = string
-  default     = "ci-cd-lab-ci"
+  type        = list(string)
+  default     = ["dev", "staging", "prod"]
 }

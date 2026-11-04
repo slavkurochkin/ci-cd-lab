@@ -8,19 +8,21 @@ terraform {
     }
   }
 
-  # Local state, deliberately. Remote state with locking is Project 8's subject,
-  # and bootstrapping an S3 backend here would mean teaching it twice. The
-  # cluster is recreated from scratch every session anyway, so the blast radius
-  # of a lost state file is one `make eks-down` run against a live account --
-  # which is exactly what scripts/eks-down.sh handles without Terraform's help.
+  # Local state, still, after Project 7 moved the long-lived stacks to S3. The
+  # cluster is recreated from scratch every session, so the blast radius of a
+  # lost state file is one `make eks-down` run against a live account, and
+  # scripts/eks-down.sh handles that without Terraform's help. CI deploys to
+  # the cluster but never applies this stack, so nothing else needs the state.
 }
 
 provider "aws" {
   region = var.region
 
-  # Every resource carries these. Project 18's Slack cost report groups by them,
-  # and cost allocation tags do not apply retroactively -- an untagged resource
-  # is permanently unattributable, so the tagging happens at creation or not at all.
+  # Every resource carries these. Project 18's Slack cost report groups by them.
+  # A cost-allocation backfill can apply an activated tag to past months, but
+  # only to resources that carried it: an untagged resource stays
+  # unattributable, so the tagging happens at creation or not at all. The node
+  # group's instances need nodes.tf's launch template to get these at all.
   default_tags {
     tags = {
       Project   = "ci-cd-lab"
