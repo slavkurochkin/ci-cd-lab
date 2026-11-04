@@ -1,0 +1,56 @@
+# Files an issue for any change to deploy/envs that reached the branch
+# without a pull request. Project 18.
+#
+# scripts/break-glass.sh files its own issue. This catches the push made by
+# hand, or the script that died after pushing: a direct change to what runs
+# leaves a record either way. It runs when Actions is up again; the script's
+# issue does not wait for that.
+name: Break-glass audit
+
+on:
+  push:
+    branches: [main, break-glass-drill]
+    paths: [deploy/envs/**]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Commits without a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            shas="$AFTER"  # a new branch: the push has no "before"
+          else
+            shas=$(gh api "repos/${REPO}/compare/${BEFORE}...${AFTER}" --jq '.commits[].sha')
+          fi
+          for sha in $shas; do
+            prs=$(gh api "repos/${REPO}/commits/${sha}/pulls" --jq 'length')
+            files=$(gh api "repos/${REPO}/commits/${sha}" --jq '[.files[].filename | select(startswith("deploy/envs/"))] | join(", ")')
+            if [ "$prs" != "0" ] || [ -z "$files" ]; then
+              echo "${sha:0:7}: through a pull request, or not a deploy change"
+              continue
+            fi
+            if gh issue list --repo "$REPO" --label break-glass --state all --search "$sha" --json number --jq 'length' | grep -qv '^0$'; then
+              echo "${sha:0:7}: already has an audit issue"
+              continue
+            fi
+            author=$(gh api "repos/${REPO}/commits/${sha}" --jq '.author.login // .commit.author.name')
+            title="Unreviewed deploy change on ${BRANCH}: ${sha:0:7}"
+            [ "$BRANCH" = main ] || title="DRILL ${title}"
+            gh issue create --repo "$REPO" --label break-glass --title "$title" --body "Commit ${sha} by @${author} changed \`${files}\` on \`${BRANCH}\` without a pull request. Filed by the break-glass audit workflow; if scripts/break-glass.sh made this change it filed its own issue too."
+            echo "${sha:0:7}: issue filed"
+          done

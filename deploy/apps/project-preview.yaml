@@ -1,0 +1,29 @@
+# What a preview Application may do. Project 18.
+#
+# Destinations pr-* only; the Namespace is the one cluster-scoped object. The
+# manifests come from main (see previews.yaml), so this is the second line,
+# not the first: it holds if someone points the ApplicationSet at a branch.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: preview
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: One Application per pull request labelled `preview`
+  sourceRepos:
+    - https://github.com/slavkurochkin/ci-cd-lab.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: pr-*
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Service}
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: apps, kind: Deployment}
+    - {group: networking.k8s.io, kind: Ingress}

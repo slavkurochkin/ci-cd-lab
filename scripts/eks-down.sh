@@ -72,6 +72,17 @@ if [ -n "$CLUSTERS" ] && command -v kubectl >/dev/null 2>&1; then
   while IFS= read -r c; do
     step "releasing LoadBalancer Services in $c"
     if aws eks update-kubeconfig --name "$c" --region "$REGION" >/dev/null 2>&1; then
+      # Stop Argo CD first (Project 18). It heals what it manages: the
+      # Traefik Service deleted below was back six seconds later, with a
+      # new NLB that nothing deleted. That NLB held the VPC, and the
+      # internet gateway sat in "destroying" for over ten minutes.
+      if kubectl get namespace argocd >/dev/null 2>&1; then
+        echo "    stopping Argo CD so it cannot recreate what is deleted next"
+        kubectl -n argocd scale statefulset argocd-application-controller --replicas=0 >/dev/null 2>&1 || true
+        kubectl -n argocd scale deployment argocd-applicationset-controller --replicas=0 >/dev/null 2>&1 || true
+        kubectl -n argocd wait pod -l app.kubernetes.io/name=argocd-application-controller \
+          --for=delete --timeout=120s >/dev/null 2>&1 || true
+      fi
       svcs=$(kubectl get svc --all-namespaces \
         -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
       if [ -z "$svcs" ]; then

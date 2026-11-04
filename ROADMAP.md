@@ -838,8 +838,10 @@ Signing without verification at admission is theatre. The enforcement point is t
 >
 > The prerequisite is boring and non-negotiable: tag every resource at creation
 > in `infra/`, and activate the tags as cost-allocation tags in Billing. Untagged
-> spend shows up as one anonymous lump, and tags do not apply retroactively — the
-> week you forget is permanently unattributable.
+> spend shows up as one anonymous lump. A backfill can now apply an activated tag
+> to up to 12 past months, but only to resources that carried it — the resource
+> you forget to tag is permanently unattributable (measured in Project 18:
+> [`docs/COST-REPORT.md`](docs/COST-REPORT.md)).
 
 > **On preview environments: a namespace per PR, never a cluster per PR.**
 > An EKS control plane bills $0.10/hour regardless of how little runs on it, so
@@ -959,7 +961,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 15 | Progressive Delivery | no lab yet — see [`docs/PROGRESSIVE-DELIVERY.md`](docs/PROGRESSIVE-DELIVERY.md) and [`k8s/overlays/progressive`](k8s/overlays/progressive) | **Done** |
 | 16 | Observability & Deployment Signals | no lab yet — see [`docs/DELIVERY-SIGNALS.md`](docs/DELIVERY-SIGNALS.md) | **Done** |
 | 17 | Supply Chain & Policy Enforcement | no lab yet — see [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md) and [`deploy/platform`](deploy/platform) | **Done** |
-| 18 | Reliability, Cost & Scale | no lab yet — see [`docs/PIPELINE-HEALTH.md`](docs/PIPELINE-HEALTH.md) | In progress: part 1 of 3 (pipeline health) done |
+| 18 | Reliability, Cost & Scale | no lab yet — see [`docs/PIPELINE-HEALTH.md`](docs/PIPELINE-HEALTH.md) and [`docs/PREVIEWS.md`](docs/PREVIEWS.md) | **Done** — 36% of spend still untagged before the node-tag fix; see [`docs/COST-REPORT.md`](docs/COST-REPORT.md) |
 
 **Built** means a lab exists with a starter, a verifier and a README.
 **Done** means the project was worked directly from this file, with no graded

@@ -1,0 +1,87 @@
+# Images for preview environments. Project 18.
+#
+# A pull request labelled `preview` gets api:pr-<number>-<head sha> in GHCR,
+# rebuilt on every push. Argo CD's ApplicationSet (deploy/apps/previews.yaml)
+# runs it in namespace pr-<number>. Closing the pull request or removing the
+# label deletes the tags; Argo CD deletes the namespace on its own.
+#
+# Same-repository pull requests only: a fork's GITHUB_TOKEN cannot write
+# packages, and building a stranger's Dockerfile with a write token is the
+# risk that rule exists for. These images are not signed by main's identity,
+# so the admission policies keep them out of api-dev, api-staging and api-prod.
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    if: >-
+      github.event.action != 'closed'
+      && contains(github.event.pull_request.labels.*.name, 'preview')
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: app/api
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          build-args: GIT_SHA=${{ github.event.pull_request.head.sha }}
+          tags: ghcr.io/${{ github.repository }}/api:pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          cache-from: type=gha,scope=api
+      - name: Where it runs
+        env:
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "### Preview"
+            echo "Argo CD picks this up within two minutes: namespace \`pr-${NUMBER}\`, host \`pr-${NUMBER}.preview\` on the shared ingress."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  delete-images:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && (github.event.action == 'closed'
+          || (github.event.action == 'unlabeled' && github.event.label.name == 'preview'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      packages: write
+    steps:
+      - name: Delete this pull request's preview tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          ids=$(gh api "/users/${OWNER}/packages/container/ci-cd-lab%2Fapi/versions" --paginate \
+            --jq ".[] | select((.metadata.container.tags | length) > 0 and all(.metadata.container.tags[]; startswith(\"pr-${NUMBER}-\"))) | .id")
+          for id in $ids; do
+            gh api -X DELETE "/users/${OWNER}/packages/container/ci-cd-lab%2Fapi/versions/${id}"
+            echo "deleted version ${id}"
+          done
+          echo "${ids:-nothing to delete}" | wc -w | xargs echo "versions deleted:"
