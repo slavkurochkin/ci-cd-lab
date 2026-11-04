@@ -179,7 +179,7 @@ argocd-bootstrap:
 platform-up: eks-up argocd-bootstrap
 	@./scripts/secret-store.sh
 	@echo "waiting for every Application to be Synced and Healthy ..."
-	@for app in kyverno external-secrets platform argocd api-dev api-staging api-prod root; do \
+	@for app in kyverno external-secrets traefik platform argocd api-dev api-staging api-prod root; do \
 		until [ "$$(kubectl -n argocd get application $$app -o jsonpath='{.status.sync.status}/{.status.health.status}' 2>/dev/null)" = "Synced/Healthy" ]; do sleep 5; done; \
 		echo "  $$app Synced/Healthy"; \
 	done

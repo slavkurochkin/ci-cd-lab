@@ -1,0 +1,49 @@
+# One ingress controller behind one load balancer, for every preview.
+# Project 18.
+#
+# Each preview adds an Ingress rule, not a load balancer: the tenth preview
+# costs what the first did. A Service of type LoadBalancer per preview would
+# add an NLB (~$0.023/hour) per open pull request.
+#
+# Traefik, not ingress-nginx: ingress-nginx was retired in March 2026.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: default
+  source:
+    repoURL: https://traefik.github.io/charts
+    chart: traefik
+    targetRevision: 42.1.3 # Traefik v3.7.16
+    helm:
+      valuesObject:
+        deployment:
+          replicas: 1
+        resources:
+          requests: {cpu: 50m, memory: 64Mi}
+          limits: {memory: 192Mi}
+        service:
+          annotations:
+            # An NLB, created by the in-tree AWS cloud provider. Without the
+            # annotation it makes a Classic ELB, which `aws elbv2` does not list.
+            service.beta.kubernetes.io/aws-load-balancer-type: nlb
+        ingressClass:
+          enabled: true
+          isDefaultClass: false
+        providers:
+          kubernetesIngress:
+            enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
