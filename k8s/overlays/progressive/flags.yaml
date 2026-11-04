@@ -1,0 +1,15 @@
+# Feature flags, read by the api from /etc/flags/flags.json on each request.
+#
+# A fixed name, not a configMapGenerator. A generated name changes with the
+# content, which changes the pod template, which is a new rollout: flipping a
+# flag would become a deploy. Mounted as a volume (not env vars, not subPath)
+# so the kubelet rewrites the file in place and running pods see it.
+#
+#   kubectl -n lab-progressive patch configmap api-flags --type merge \
+#     -p '{"data":{"flags.json":"{\"quotes\": true}"}}'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-flags
+data:
+  flags.json: '{"quotes": false}'

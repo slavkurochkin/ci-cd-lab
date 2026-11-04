@@ -1,0 +1,81 @@
+# A preview of a pull request: the api and its own DynamoDB Local, in
+# namespace pr-<number>. Project 18.
+#
+# deploy/apps/previews.yaml (an ApplicationSet) renders this from the pull
+# request's own commit and sets, per pull request: the namespace, the image
+# (api:pr-<number>-<sha>, built by .github/workflows/preview.yml) and the
+# ingress host.
+#
+# What a namespace preview cannot check: anything cluster-scoped (CRDs,
+# webhooks, ClusterRoles, the admission policies themselves) and anything in
+# AWS (the real table, Pod Identity). A change to those needs dev.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: preview
+
+resources:
+  - ../../k8s/base
+  - namespace.yaml
+  - quota.yaml
+  - ingress.yaml
+
+replicas:
+  - name: api
+    count: 1
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=preview
+
+patches:
+  # Not needed to preview the api: the worker, Vault, and the PDB (with one
+  # replica it would block every node drain).
+  - patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: worker
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: api-secrets
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1
+      kind: SecretStore
+      metadata:
+        name: vault
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: api-secrets-reader
+  - patch: |-
+      $patch: delete
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: api
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: remove
+        path: /metadata/annotations/secret.reloader.stakater.com~1reload
+      - op: remove
+        path: /spec/template/spec/initContainers/0/envFrom/1
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom/1
+      - op: replace
+        path: /spec/template/spec/initContainers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent

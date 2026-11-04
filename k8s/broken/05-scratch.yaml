@@ -1,0 +1,39 @@
+# Broken on purpose. Project 12, case 5.
+#
+#   kubectl apply -f k8s/broken/00-namespace.yaml -f k8s/broken/05-scratch.yaml
+#
+# Symptom: the pod keeps being replaced. Old pods show STATUS Completed; the
+# newest has RESTARTS 1.
+# Find the cause with kubectl before reading k8s/broken/README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scratch
+  namespace: lab-broken
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: scratch}
+  template:
+    metadata:
+      labels: {app: scratch}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: api
+          image: ci-cd-lab/api:local
+          imagePullPolicy: Never
+          # Warms a 100 MB cache in /tmp, then starts the server.
+          command: ["sh", "-c", "dd if=/dev/zero of=/tmp/cache bs=1M count=100 && exec uvicorn api.main:app --host 0.0.0.0 --port 8000 --app-dir /app/src"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: {cpu: 10m, memory: 64Mi, ephemeral-storage: 20Mi}
+            limits: {memory: 128Mi, ephemeral-storage: 50Mi}
+      volumes:
+        - name: tmp
+          emptyDir: {}

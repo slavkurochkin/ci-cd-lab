@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars. That file is gitignored.
+
+# Where budget alerts go. No default: an alert nobody receives is not an alert.
+budget_email = "you@example.com"
+
+# Optional -- these are the defaults.
+# region       = "us-east-1"
+# budget_limit = 50

@@ -1,0 +1,36 @@
+# No root, no privileged containers. Project 17.
+#
+# runAsNonRoot makes the kubelet refuse to start a container whose user is
+# 0; the policy makes sure it is asked to. Set on the pod or on each
+# container: a container's own setting wins over the pod's.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: non-root
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [api-dev, api-staging, api-prod]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  variables:
+    - name: containers
+      expression: object.spec.containers + object.spec.?initContainers.orValue([])
+    - name: podNonRoot
+      expression: object.spec.?securityContext.?runAsNonRoot.orValue(false)
+  validations:
+    - expression: >-
+        variables.containers.all(c, c.?securityContext.?runAsNonRoot.orValue(variables.podNonRoot) == true)
+      messageExpression: >-
+        'every container must set runAsNonRoot: true (on the pod or the container); not set for: '
+        + variables.containers.filter(c, c.?securityContext.?runAsNonRoot.orValue(variables.podNonRoot) != true).map(c, c.name).join(', ')
+    - expression: >-
+        variables.containers.all(c, c.?securityContext.?privileged.orValue(false) == false)
+      message: privileged containers are not allowed

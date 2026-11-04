@@ -1,0 +1,22 @@
+# At most one api pod down at a time from a voluntary disruption: a node
+# drain, a cluster upgrade, anything that goes through the eviction API.
+# Project 12.
+#
+# maxUnavailable, not minAvailable. With `minAvailable: 1` and dev's single
+# replica, no eviction is ever allowed and a node drain waits forever. With
+# `maxUnavailable: 1`, dev's one pod can be moved (a short outage dev
+# accepts) and prod's three go one at a time.
+#
+# A PDB does nothing about crashes, OOM kills or a node dying. It only makes
+# polite removals wait their turn.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api

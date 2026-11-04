@@ -1,0 +1,80 @@
+# This repository's images, by digest, and nothing else. Project 17.
+#
+# The other half of require-signed-images.yaml, whose glob decides what it
+# checks: `nginx:latest` matches no glob there, so it is not checked, so it
+# passes. This policy refuses it.
+#
+# A digest, not a tag: a signature is on a digest, and a tag can be moved to
+# another one after the pod was admitted. Kyverno would resolve the tag at
+# admission and the kubelet again at pull time, and they need not agree.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: pinned-own-images
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [api-dev, api-staging, api-prod]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        # `pods` alone. Adding pods/ephemeralcontainers here switches off
+        # autogen, without a warning: the policy then no longer checks
+        # Deployments, a Deployment with nginx:latest is accepted, and the
+        # refusal shows up only in its ReplicaSet's events, as pods that are
+        # never created. The ephemeral containers have their own policy below.
+        resources: ["pods"]
+  variables:
+    - name: containers
+      expression: >-
+        object.spec.containers + object.spec.?initContainers.orValue([])
+    - name: foreign
+      expression: >-
+        variables.containers.filter(c, !c.image.startsWith('ghcr.io/slavkurochkin/ci-cd-lab/')).map(c, c.image)
+    - name: unpinned
+      expression: >-
+        variables.containers.filter(c, !c.image.contains('@sha256:')).map(c, c.image)
+  validations:
+    - expression: size(variables.foreign) == 0
+      messageExpression: >-
+        'only ghcr.io/slavkurochkin/ci-cd-lab/ images may run here; refused: ' + variables.foreign.join(', ')
+    - expression: size(variables.unpinned) == 0
+      messageExpression: >-
+        'images must be pinned by digest (name@sha256:...), not a tag; refused: ' + variables.unpinned.join(', ')
+---
+# `kubectl debug` adds an ephemeral container to a running pod through the
+# pods/ephemeralcontainers subresource, which a rule on `pods` never sees.
+# Debug containers come from this repository's images too: the api image has
+# Python, which is enough to look around (Project 12's busybox is refused).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: pinned-own-debug-images
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [api-dev, api-staging, api-prod]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods/ephemeralcontainers"]
+  variables:
+    - name: foreign
+      expression: >-
+        object.spec.?ephemeralContainers.orValue([])
+        .filter(c, !c.image.startsWith('ghcr.io/slavkurochkin/ci-cd-lab/') || !c.image.contains('@sha256:'))
+        .map(c, c.image)
+  validations:
+    - expression: size(variables.foreign) == 0
+      messageExpression: >-
+        'debug containers must use a ghcr.io/slavkurochkin/ci-cd-lab/ image by digest; refused: ' + variables.foreign.join(', ')

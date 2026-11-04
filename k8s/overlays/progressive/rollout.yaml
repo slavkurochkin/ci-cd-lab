@@ -1,0 +1,104 @@
+# The api as an Argo Rollout. Project 15.
+#
+# Deploy and release are separate: a new version is deployed to one pod in
+# five, and released further only while its own error rate stays under 5%.
+# No service mesh, so the traffic share is the pod share: the Service spreads
+# requests over every ready pod, and 1 canary pod of 5 gets about 20%.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  replicas: 5
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  strategy:
+    canary:
+      # Runs from the first step until the rollout finishes, every 20s.
+      analysis:
+        templates:
+          - templateName: error-rate
+        startingStep: 1
+        args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      steps:
+        - setWeight: 20
+        - pause: {duration: 60s}
+        - setWeight: 40
+        - pause: {duration: 60s}
+        - setWeight: 60
+        - pause: {duration: 60s}
+        - setWeight: 80
+        - pause: {duration: 60s}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      initContainers:
+        - name: create-table
+          image: ci-cd-lab/api:local
+          imagePullPolicy: Never
+          command: ["python", "-c", "from api.store import OrderStore; OrderStore().create_table()"]
+          envFrom:
+            - configMapRef:
+                name: api-config
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: api
+          image: ci-cd-lab/api:local
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: api-config
+          env:
+            - name: FLAGS_FILE
+              value: /etc/flags/flags.json
+          volumeMounts:
+            - name: flags
+              mountPath: /etc/flags
+              readOnly: true
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {memory: 160Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: flags
+          configMap:
+            name: api-flags
