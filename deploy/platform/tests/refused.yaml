@@ -1,0 +1,71 @@
+# Objects the platform policies must refuse, one reason each. Project 17.
+# scripts/policy-check.sh fails if any of them is admitted.
+apiVersion: v1
+kind: Pod
+metadata: {name: foreign-image, namespace: api-dev}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers: [{name: web, image: "nginx:latest"}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: own-image-by-tag, namespace: api-dev}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers: [{name: api, image: "ghcr.io/slavkurochkin/ci-cd-lab/api:sha-44e43e9"}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: no-run-as-non-root, namespace: api-staging}
+spec:
+  containers: [{name: api, image: "ghcr.io/slavkurochkin/ci-cd-lab/api@sha256:44e43e951bcb59216f9eda967a0602004722b0a8bda92c69ae7ece5cbb372f09"}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: container-overrides-pod, namespace: api-prod}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers:
+    - name: api
+      image: "ghcr.io/slavkurochkin/ci-cd-lab/api@sha256:44e43e951bcb59216f9eda967a0602004722b0a8bda92c69ae7ece5cbb372f09"
+      securityContext: {runAsNonRoot: false}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: privileged, namespace: api-prod}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers:
+    - name: api
+      image: "ghcr.io/slavkurochkin/ci-cd-lab/api@sha256:44e43e951bcb59216f9eda967a0602004722b0a8bda92c69ae7ece5cbb372f09"
+      securityContext: {privileged: true}
+---
+# Refused as a Deployment, before any ReplicaSet exists (autogen).
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: foreign-image, namespace: api-dev}
+spec:
+  selector: {matchLabels: {app: x}}
+  template:
+    metadata: {labels: {app: x}}
+    spec:
+      securityContext: {runAsNonRoot: true}
+      containers: [{name: web, image: "nginx:1.29"}]
+---
+# A digest CI never built: there is no signature to find.
+apiVersion: v1
+kind: Pod
+metadata: {name: digest-ci-never-built, namespace: api-dev}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers: [{name: k, image: "ghcr.io/slavkurochkin/ci-cd-lab/api@sha256:0000000000000000000000000000000000000000000000000000000000000000"}]
+---
+# Pushed with no signature and no attestation for Project 17's measurement,
+# then deleted. On the cluster it was refused as unsigned; now that the
+# manifest is gone it is refused as not found.
+apiVersion: v1
+kind: Pod
+metadata: {name: unsigned, namespace: api-dev}
+spec:
+  securityContext: {runAsNonRoot: true}
+  containers: [{name: api, image: "ghcr.io/slavkurochkin/ci-cd-lab/api@sha256:5c8b48ed0e272f0f1a2bdb4182dd2961f3a7a26d977c280137dc52d2b4809cc5"}]

@@ -1,0 +1,6 @@
+# The five broken deployments run here, away from lab-dev and lab-prod.
+#   kubectl delete namespace lab-broken    # when done
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-broken

@@ -29,13 +29,14 @@ So one resource is now a deliberate exception, and the discipline moved from
 | Resource | Rate | Why it is now in scope |
 |---|---|---|
 | **EKS control plane** | $0.10/hr | The reachability problem in Project 13 is only real if the cluster is genuinely unreachable from a runner. |
-| **2 × `t3.medium` nodes** | $0.083/hr | Real nodes mean real scheduling, real evictions, and an actual `Pending` pod with an actual reason. |
-| **NLB** (from a `Service`) | $0.023/hr | Created by Kubernetes, not Terraform. Learning that it outlives its Service is half of Project 13's teardown lesson. |
+| **2 × `t3.small` nodes** | $0.042/hr | Real nodes mean real scheduling, real evictions, and an actual `Pending` pod with an actual reason. `t3.small`, not `t3.medium`: an account on AWS's free plan may only launch free-tier-eligible types (Project 13). |
+| **Public IPv4 addresses** | $0.005/hr each | Every node has one (no NAT), and so does the load balancer, in each subnet. About $0.02/hr in all. |
+| **Classic ELB** (from a `Service`) | $0.025/hr | Created by Kubernetes, not Terraform. Learning that it outlives its Service is half of Project 13's teardown lesson. |
 
-**About $0.21/hour, so about $4.50/day if you forget.**
+**About $0.15/hour, $0.19 while the load balancer exists, so about $4.50/day if you forget.**
 
-A four-hour session costs **$0.84**. Twelve sessions a month costs **$10**.
-A cluster left up for three weeks costs **$92** — that, and nothing else, is the
+A four-hour session costs about **$0.75**. Twelve sessions a month costs about **$9**.
+A cluster left up for three weeks costs about **$95** — that, and nothing else, is the
 failure mode this document exists to prevent. The hourly rate is not the risk.
 Forgetting is the risk.
 
@@ -49,6 +50,8 @@ and the rule for it is different.
 |---|---|---|
 | **ECR repositories** | $0.10/GB/month | Years. The images Track C pulls are stored here. |
 | **IAM role and OIDC provider** | $0 | Years. |
+| **Terraform state bucket** (Project 7) | ~$0: a few dozen KB, plus $0.005 per 1,000 writes | Years. Every long-lived stack's state is in it. Never destroy it. |
+| **Each environment** (Capstone B): Lambda, HTTP API, DynamoDB on demand, logs (7 days), data bucket | ~$0 while idle: all bill per request. October 2026 to date: $0.0162 of usage for the whole account, covered by Free-plan credits. The API's throttle (5 rps) caps what anonymous traffic can cost | Until `enabled = false` in its tfvars. See `docs/CAPSTONE-B.md`. |
 
 ### What ECR actually costs here
 
@@ -117,6 +120,7 @@ If a lab asks you to create one of these, it is a bug in the lab.
 | **ECR** | 500 MB private storage / month | 12 months |
 | **API Gateway** (HTTP API) | 1M requests / month | 12 months |
 | **SSM Parameter Store** (standard) | Unlimited standard parameters | Never |
+| **EventBridge Scheduler, SNS, Lambda** (the Project 18 cost report) | 14M scheduler invocations, 1M SNS publishes, 1M Lambda requests / month | Never |
 
 The four with a 12-month clock are the ones to watch if you work through this
 slowly. If your account is older than a year, S3 and ECR start billing — at these
@@ -208,3 +212,7 @@ Service that was deleted after the cluster. Both are in the sweep for that reaso
 
 An AWS account you cannot confidently empty is one you will be afraid to
 experiment in, which defeats the point of having a lab account.
+
+## Not free, on purpose: Cost Explorer
+
+The Project 18 cost report calls the Cost Explorer API, which bills **$0.01 per request** with no free tier. The weekly digest makes two: about $0.09 a month. Building it took about 15 requests. A script that polls Cost Explorer in a loop is the one way in this curriculum to spend real money without a cluster.

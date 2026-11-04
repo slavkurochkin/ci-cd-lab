@@ -570,7 +570,7 @@ A second one, from the secrets half: every secrets system bottoms out in one cre
 
 ## Project 13 — Deploying from CI
 
-**Runs on:** EKS. ~$0.21/hr while up — `make eks-up` to start, `make eks-down` to stop. See [docs/COST.md](docs/COST.md).
+**Runs on:** EKS. ~$0.19/hr while up — `make eks-up` to start, `make eks-down` to stop. See [docs/COST.md](docs/COST.md).
 **Goal:** Get a workflow to deploy to a real cluster it cannot see, and only report success when the rollout has actually converged.
 
 ### Concepts
@@ -838,8 +838,10 @@ Signing without verification at admission is theatre. The enforcement point is t
 >
 > The prerequisite is boring and non-negotiable: tag every resource at creation
 > in `infra/`, and activate the tags as cost-allocation tags in Billing. Untagged
-> spend shows up as one anonymous lump, and tags do not apply retroactively — the
-> week you forget is permanently unattributable.
+> spend shows up as one anonymous lump. A backfill can now apply an activated tag
+> to up to 12 past months, but only to resources that carried it — the resource
+> you forget to tag is permanently unattributable (measured in Project 18:
+> [`docs/COST-REPORT.md`](docs/COST-REPORT.md)).
 
 > **On preview environments: a namespace per PR, never a cluster per PR.**
 > An EKS control plane bills $0.10/hour regardless of how little runs on it, so
@@ -884,8 +886,8 @@ Signing without verification at admission is theatre. The enforcement point is t
 > | | |
 > |---|---|
 > | Two `/24` subnets | 502 usable IPs |
-> | `t3.medium` max pods | 3 ENIs × 6 IPs − 1 = 17 per node |
-> | Two nodes, less DaemonSets | **~28 schedulable pods** |
+> | `t3.small` max pods | 3 ENIs × (4 IPs − 1) + 2 = 11 per node |
+> | Two nodes, less coredns | **~20 schedulable pods** |
 >
 > The node ceiling binds roughly eighteen times harder than the address space.
 > Previews here run out of CPU and scheduling room, not IPs; a `Pending` pod on
@@ -945,21 +947,21 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 4 | Trust: Permissions, OIDC & Supply Chain | [`labs/04_trust`](labs/04_trust) | Built |
 | 5 | Building & Publishing Containers | [`labs/05_containers`](labs/05_containers) | Built |
 | A | Capstone — The Golden Pipeline | no lab — worked from this file | **Done** |
-| 6 | Terraform Fundamentals | — | Planned |
-| 7 | State, Drift & Collaboration | — | Planned |
-| 8 | Modules & Composition | — | Planned |
-| 9 | Terraform in CI | — | Planned |
-| B | Capstone — Reproducible Cloud Foundation | — | Planned |
-| 10 | Kubernetes Fundamentals | — | Planned |
-| 11 | Configuration & Packaging | — | Planned |
-| 12 | Rollouts, Failure & Forensics | — | Planned |
-| 13 | Deploying from CI | — | Planned |
-| 14 | GitOps with Argo CD | — | Planned |
-| C | Capstone — The Delivery Platform | — | Planned |
-| 15 | Progressive Delivery | — | Planned |
-| 16 | Observability & Deployment Signals | — | Planned |
-| 17 | Supply Chain & Policy Enforcement | — | Planned |
-| 18 | Reliability, Cost & Scale | — | Planned |
+| 6 | Terraform Fundamentals | [`labs/06_terraform`](labs/06_terraform) | Built |
+| 7 | State, Drift & Collaboration | no lab yet — worked from this file, see [`infra/state`](infra/state) | **Done** |
+| 8 | Modules & Composition | no lab yet — worked from this file, see [`infra/modules/ecr-repository`](infra/modules/ecr-repository) | **Done** |
+| 9 | Terraform in CI | no lab yet — worked from this file, see [`docs/TERRAFORM-CI.md`](docs/TERRAFORM-CI.md) | **Done** |
+| B | Capstone — Reproducible Cloud Foundation | no lab — see [`docs/CAPSTONE-B.md`](docs/CAPSTONE-B.md) | **Done** |
+| 10 | Kubernetes Fundamentals | no lab yet — worked from this file, see [`k8s`](k8s) | **Done** |
+| 11 | Configuration & Packaging | no lab yet — see [`docs/CONFIG-AND-PACKAGING.md`](docs/CONFIG-AND-PACKAGING.md) | **Done** |
+| 12 | Rollouts, Failure & Forensics | no lab yet — see [`docs/ROLLOUTS-AND-FORENSICS.md`](docs/ROLLOUTS-AND-FORENSICS.md) and [`k8s/broken`](k8s/broken) | **Done** |
+| 13 | Deploying from CI | no lab yet — see [`docs/DEPLOYING-FROM-CI.md`](docs/DEPLOYING-FROM-CI.md) | **Done** |
+| 14 | GitOps with Argo CD | no lab yet — see [`docs/GITOPS.md`](docs/GITOPS.md) and [`deploy/`](deploy) | **Done** |
+| C | Capstone — The Delivery Platform | no lab — see [`docs/CAPSTONE-C.md`](docs/CAPSTONE-C.md) and [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | **Done** |
+| 15 | Progressive Delivery | no lab yet — see [`docs/PROGRESSIVE-DELIVERY.md`](docs/PROGRESSIVE-DELIVERY.md) and [`k8s/overlays/progressive`](k8s/overlays/progressive) | **Done** |
+| 16 | Observability & Deployment Signals | no lab yet — see [`docs/DELIVERY-SIGNALS.md`](docs/DELIVERY-SIGNALS.md) | **Done** |
+| 17 | Supply Chain & Policy Enforcement | no lab yet — see [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md) and [`deploy/platform`](deploy/platform) | **Done** |
+| 18 | Reliability, Cost & Scale | no lab yet — see [`docs/PIPELINE-HEALTH.md`](docs/PIPELINE-HEALTH.md) and [`docs/PREVIEWS.md`](docs/PREVIEWS.md) | **Done** — 36% of spend still untagged before the node-tag fix; see [`docs/COST-REPORT.md`](docs/COST-REPORT.md) |
 
 **Built** means a lab exists with a starter, a verifier and a README.
 **Done** means the project was worked directly from this file, with no graded

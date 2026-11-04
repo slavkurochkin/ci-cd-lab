@@ -1,0 +1,37 @@
+# The prod overlay: the base, plus only what makes it prod. Project 11.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lab-prod
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+replicas:
+  - name: api
+    count: 3
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=prod
+
+# Measured: one pod served ~357 req/s at 460m CPU. Prod runs three
+# replicas, so 250m each covers that load with one pod lost.
+# No CPU limit: a CPU limit throttles a busy pod even when the node is idle.
+# A memory limit stays: without one, one pod can take the node's memory.
+patches:
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 96Mi
+          limits:
+            memory: 192Mi
