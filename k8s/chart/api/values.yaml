@@ -1,0 +1,45 @@
+# Defaults for the lab-api chart. values.schema.json rejects anything that
+# does not fit, at `helm template` time rather than in the cluster.
+
+replicaCount: 2
+
+image:
+  repository: ci-cd-lab/api
+  tag: local
+  # Never: run what `minikube image build` produced. Use IfNotPresent with a
+  # registry image.
+  pullPolicy: Never
+
+# Numeric, for the reason in k8s/base/api.yaml: the image says `USER app`.
+runAsUser: 1001
+
+# Becomes the ConfigMap, then environment variables.
+config:
+  ENVIRONMENT: helm
+  AWS_REGION: us-east-1
+  DYNAMODB_ENDPOINT: http://dynamodb:8000
+  ORDERS_TABLE: orders
+
+# The Kubernetes Secret the pods read with envFrom. When externalSecret is
+# enabled, this chart also creates the ExternalSecret that fills it from
+# Vault, the same way k8s/base/secrets.yaml does.
+secrets:
+  name: api-secrets
+  externalSecret:
+    enabled: false
+    storeName: vault
+    key: lab/api
+    refreshInterval: 15s
+
+# From measurement (k8s/README.md): idle 34Mi of anonymous memory, about
+# 460m CPU at ~357 req/s on one pod. No CPU limit, on purpose.
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 192Mi
+
+probes:
+  readinessPath: /readyz
+  livenessPath: /healthz

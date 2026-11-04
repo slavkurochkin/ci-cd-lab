@@ -1,0 +1,30 @@
+# The api's admin tokens, from SSM Parameter Store. Project 17.
+#
+# The key is this namespace's own path, /ci-cd-lab/<namespace>/admin-tokens;
+# each environment's kustomization sets it. Naming another environment's path
+# does not work: the AWS role External Secrets reads with is limited to the
+# path of the namespace the ExternalSecret lives in (infra/eks/secrets.tf).
+#
+# The ClusterSecretStore `ssm` is not in Git, because it names an IAM role
+# ARN and so the account ID. scripts/secret-store.sh creates it.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: admin-tokens
+  annotations:
+    # Before the pre-flight hook (-1) and the Deployment (0) that mount it.
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  # The longest a rotation in SSM waits before reaching the Secret. The
+  # kubelet then takes up to a minute more to rewrite the mounted file.
+  refreshInterval: 30s
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: ssm
+  target:
+    name: admin-tokens
+    creationPolicy: Owner
+  data:
+    - secretKey: tokens
+      remoteRef:
+        key: /ci-cd-lab/NAMESPACE/admin-tokens

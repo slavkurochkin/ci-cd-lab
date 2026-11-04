@@ -1,0 +1,40 @@
+# Kyverno: the admission controller that enforces deploy/platform's
+# policies. Project 17.
+#
+# Before the policies (wave -2) and the api (wave 0). Argo CD does not wait
+# for a child Application to be healthy before the next wave, so the
+# platform Application also retries until Kyverno's CRDs exist.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: default
+  source:
+    repoURL: https://kyverno.github.io/kyverno/
+    chart: kyverno
+    targetRevision: 3.9.1 # Kyverno v1.19.1
+    helm:
+      valuesObject:
+        # Admission and reports only. The background controller runs
+        # generate and mutate-existing rules, the cleanup controller runs
+        # cleanup policies; this lab has neither, and t3.small nodes hold 11
+        # pods each.
+        backgroundController:
+          enabled: false
+        cleanupController:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Kyverno's CRDs are too large for client-side apply's annotation.
+      - ServerSideApply=true

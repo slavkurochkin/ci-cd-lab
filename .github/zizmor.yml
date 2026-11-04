@@ -18,3 +18,4 @@ rules:
       # Revisit when act supports it.
       - reusable-service-ci.yml
       - lab-03-ci.yml
+      - pipeline-health.yml

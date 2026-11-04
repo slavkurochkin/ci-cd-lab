@@ -58,11 +58,13 @@ Docker Desktop is needed from Project 5 onward. Install it before then and leave
 
 ## Later — Track B (Projects 6–9)
 
-**Tools:** `terraform`, `awscli`, `tflint`, `checkov`.
+**Tools:** `terraform`, `awscli`, `tflint`, `terraform-docs`, `checkov`, `conftest`.
 
 ```bash
-brew install hashicorp/tap/terraform terraform-linters/tap/tflint awscli checkov
+brew install hashicorp/tap/terraform terraform-linters/tap/tflint terraform-docs awscli checkov conftest
 ```
+
+To see the `checkov` findings CI sees, run it the way CI does: `uvx checkov==3.3.10 --directory infra/envs --directory infra/modules --framework terraform`. The Homebrew install of the same version reported fewer checks here. See `docs/TERRAFORM-CI.md`.
 
 ### An AWS account
 
@@ -117,6 +119,8 @@ kubectl get nodes
 
 `minikube stop` when you are not using it; it is a VM on your laptop and it is not free in battery.
 
+**`--memory` only applies when the cluster is first created.** On an existing profile it is ignored, and `minikube config get memory` (or `docker stats minikube`) shows what the cluster really has. With the Docker driver, minikube also shares Docker Desktop's VM with every other container you run. In Project 11 a 6 GiB minikube profile, next to 4.6 GiB of unrelated containers in a 7.65 GiB VM, ran the VM out of memory: the kernel killed Vault, then the API server restarted. Check `docker stats --no-stream` before starting anything heavy.
+
 ### Projects 13–14 run on EKS
 
 From Project 13 the cluster is real, because the lessons there — a runner that genuinely cannot reach it, pod identity, a load balancer that outlives its Service — have no local equivalent.
@@ -125,23 +129,23 @@ From Project 13 the cluster is real, because the lessons there — a runner that
 export AWS_LAB_REGION=us-east-1
 export AWS_LAB_ACCOUNT_ID=<your lab account>
 
-make eks-up      # ~15 min, starts billing at ~$0.21/hr
+make eks-up      # ~15 min, starts billing at ~$0.19/hr
 # ... work the lab ...
 make eks-down    # destroys everything, then sweeps for orphans
 ```
 
 `make eks-down` is the last command of every session. It is safe to run twice, and it deliberately does not trust `terraform destroy` — see [COST.md](COST.md) for what it does and why the order matters.
 
-A four-hour session costs about **$0.84**. A cluster you forget about costs **$4.50/day**. Put both exports in your shell profile so the guard always knows which account it is allowed to touch.
+A four-hour session costs about **$0.75**. A cluster you forget about costs **$4.50/day**. Put both exports in your shell profile so the guard always knows which account it is allowed to touch.
 
 ---
 
 ## Track D (Projects 15–18)
 
-**Tools:** `trivy`, `cosign`, plus Prometheus and Grafana installed into minikube by the labs themselves.
+**Tools:** `trivy`, `cosign`, `kyverno` (the CLI, for `scripts/policy-check.sh`), plus Prometheus and Grafana installed into minikube by the labs themselves.
 
 ```bash
-brew install trivy cosign
+brew install trivy cosign kyverno
 ```
 
 ---

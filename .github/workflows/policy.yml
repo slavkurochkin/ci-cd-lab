@@ -1,0 +1,54 @@
+# The cluster's admission policies, run in CI. Project 17.
+#
+# Kyverno refuses a bad pod at admission, but in a GitOps setup that is late:
+# the pull request has merged, Argo CD's sync fails, and the error is in the
+# Application's status, not on the pull request. This runs the same policies
+# against every rendered environment first, signature check included, so a
+# promotion of an unsigned digest fails here.
+name: Policy
+
+on:
+  pull_request:
+    paths:
+      - deploy/**
+      - k8s/**
+      - scripts/policy-check.sh
+      - .github/workflows/policy.yml
+  push:
+    branches: [main]
+    paths:
+      - deploy/**
+      - k8s/**
+      - scripts/policy-check.sh
+      - .github/workflows/policy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  policy-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The hash is pinned here, not read from the release's checksums.txt:
+      # anyone able to replace the tarball could replace that file too.
+      - name: Install the kyverno CLI
+        env:
+          VERSION: v1.19.1
+          SHA256: b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae
+        run: |
+          file="kyverno-cli_${VERSION}_linux_x86_64.tar.gz"
+          curl -fsSLO "https://github.com/kyverno/kyverno/releases/download/${VERSION}/${file}"
+          echo "${SHA256}  ${file}" | sha256sum --check
+          tar -xzf "$file" kyverno
+          sudo mv kyverno /usr/local/bin/
+          kyverno version
+
+      - name: Run the policies
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || pip install --user pyyaml
+          ./scripts/policy-check.sh

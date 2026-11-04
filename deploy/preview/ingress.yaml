@@ -1,0 +1,19 @@
+# One rule per preview on the shared Traefik controller: no load balancer of
+# its own. The ApplicationSet replaces the host with pr-<number>.preview.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: preview.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 80

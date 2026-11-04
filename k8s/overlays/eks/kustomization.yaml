@@ -1,0 +1,125 @@
+# The api on EKS. Project 13.
+#
+# The same base as dev and prod, minus what only exists locally (DynamoDB
+# Local, Vault, the worker Job) and plus what only exists in AWS: a real
+# table reached through Pod Identity, and a load balancer.
+#
+# The image stays `ci-cd-lab/api:local` here on purpose. The deploy workflow
+# wraps this overlay in a kustomization that pins the digest its image job
+# resolved, so the registry (and the account ID in it) is never committed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lab
+
+resources:
+  - ../../base
+  - serviceaccount.yaml
+  - preflight.yaml
+  - admin-tokens.yaml
+
+replicas:
+  - name: api
+    count: 2
+
+# No DYNAMODB_ENDPOINT: without it the store talks to real DynamoDB, with
+# credentials from Pod Identity. `replace`, because a merge cannot remove a key.
+configMapGenerator:
+  - name: api-config
+    behavior: replace
+    literals:
+      - ENVIRONMENT=eks
+      - AWS_REGION=us-east-1
+      - ORDERS_TABLE=lab-orders
+    # Project 14: applied before the pre-flight hook (wave -1) reads it.
+    options:
+      annotations:
+        argocd.argoproj.io/sync-wave: "-2"
+
+patches:
+  # Local-only objects from the base.
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: dynamodb
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: dynamodb
+  - patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: worker
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: api-secrets
+  - patch: |-
+      $patch: delete
+      apiVersion: external-secrets.io/v1
+      kind: SecretStore
+      metadata:
+        name: vault
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: api-secrets-reader
+
+  # The api: Pod Identity's ServiceAccount, no table-creating init container
+  # (Terraform owns the table), no Secret (there is no key), pull from ECR.
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: add
+        path: /spec/template/spec/serviceAccountName
+        value: api
+      - op: remove
+        path: /spec/template/spec/initContainers
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom/1
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: remove
+        path: /metadata/annotations/secret.reloader.stakater.com~1reload
+      # Project 17: the admin tokens as a file, not an environment variable.
+      # The kubelet rewrites a mounted Secret when it changes and the app
+      # re-reads it, so a rotation needs no restart. No subPath: a subPath
+      # mount is a copy made at start and is never updated. Optional, so a
+      # namespace whose parameter does not exist yet still starts, with the
+      # admin route answering 404.
+      - op: add
+        path: /spec/template/spec/volumes
+        value:
+          - name: admin-tokens
+            secret:
+              secretName: admin-tokens
+              optional: true
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts
+        value:
+          - name: admin-tokens
+            mountPath: /etc/admin
+            readOnly: true
+
+  # Reachable from outside the cluster, so the workflow's smoke test can hit
+  # it from a GitHub runner. This creates an AWS load balancer that Terraform
+  # does not know about; scripts/eks-down.sh deletes it first.
+  - target:
+      kind: Service
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: LoadBalancer
