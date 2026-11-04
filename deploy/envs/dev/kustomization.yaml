@@ -17,7 +17,7 @@ resources:
 images:
   - name: ci-cd-lab/api
     newName: ghcr.io/slavkurochkin/ci-cd-lab/api
-    digest: sha256:a0d0623a0ab080816ed2182fa04b6cd6b0407a1fedd326bdff6e711d6b8a0a30
+    digest: sha256:278e7e1b0134f948128f848dc914f2008b28decd0217430faaf98621bbd7e462
 
 replicas:
   - name: api
