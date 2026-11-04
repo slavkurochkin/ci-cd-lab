@@ -151,8 +151,10 @@ report "RDS instances"     aws rds describe-db-instances --region "$REGION" \
 
 echo
 echo "Environments -- created and destroyed by CI (live: ${live_envs[*]:-none})"
+# The cost report's Lambda (Project 18) persists by design and is listed
+# below, not here.
 by_environment "Lambda functions"  aws lambda list-functions --region "$REGION" \
-  --query 'Functions[].FunctionName' --output text
+  --query "Functions[?FunctionName!='ci-cd-lab-cost-report'].FunctionName" --output text
 by_environment "API Gateway APIs"  aws apigatewayv2 get-apis --region "$REGION" \
   --query 'Items[].Name' --output text
 by_environment "DynamoDB tables"   aws dynamodb list-tables --region "$REGION" \
@@ -165,6 +167,9 @@ persistent "ECR repositories" "~\$0.03/mo, capped at 10 images each" \
   --query 'repositories[].repositoryName' --output text
 persistent "S3 buckets" "~\$0/mo at this size" \
   aws s3api list-buckets --query 'Buckets[].Name' --output text
+persistent "Cost report" "~\$0.02/week, Cost Explorer requests (Project 18)" \
+  aws lambda list-functions --region "$REGION" \
+  --query "Functions[?FunctionName=='ci-cd-lab-cost-report'].FunctionName" --output text
 
 echo
 echo "Guardrails -- these SHOULD exist"

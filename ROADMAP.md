@@ -959,7 +959,7 @@ The capstones sit deliberately on the seams between domains, because the seams a
 | 15 | Progressive Delivery | no lab yet — see [`docs/PROGRESSIVE-DELIVERY.md`](docs/PROGRESSIVE-DELIVERY.md) and [`k8s/overlays/progressive`](k8s/overlays/progressive) | **Done** |
 | 16 | Observability & Deployment Signals | no lab yet — see [`docs/DELIVERY-SIGNALS.md`](docs/DELIVERY-SIGNALS.md) | **Done** |
 | 17 | Supply Chain & Policy Enforcement | no lab yet — see [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md) and [`deploy/platform`](deploy/platform) | **Done** |
-| 18 | Reliability, Cost & Scale | no lab yet — see [`docs/PIPELINE-HEALTH.md`](docs/PIPELINE-HEALTH.md) | In progress: part 1 of 3 (pipeline health) done |
+| 18 | Reliability, Cost & Scale | no lab yet — see [`docs/PIPELINE-HEALTH.md`](docs/PIPELINE-HEALTH.md) and [`docs/PREVIEWS.md`](docs/PREVIEWS.md) | In progress: parts 1 and 3 done; the cost report is deployed, its tag attribution not yet measured |
 
 **Built** means a lab exists with a starter, a verifier and a README.
 **Done** means the project was worked directly from this file, with no graded
