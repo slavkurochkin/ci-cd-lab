@@ -120,6 +120,7 @@ If a lab asks you to create one of these, it is a bug in the lab.
 | **ECR** | 500 MB private storage / month | 12 months |
 | **API Gateway** (HTTP API) | 1M requests / month | 12 months |
 | **SSM Parameter Store** (standard) | Unlimited standard parameters | Never |
+| **EventBridge Scheduler, SNS, Lambda** (the Project 18 cost report) | 14M scheduler invocations, 1M SNS publishes, 1M Lambda requests / month | Never |
 
 The four with a 12-month clock are the ones to watch if you work through this
 slowly. If your account is older than a year, S3 and ECR start billing — at these
@@ -211,3 +212,7 @@ Service that was deleted after the cluster. Both are in the sweep for that reaso
 
 An AWS account you cannot confidently empty is one you will be afraid to
 experiment in, which defeats the point of having a lab account.
+
+## Not free, on purpose: Cost Explorer
+
+The Project 18 cost report calls the Cost Explorer API, which bills **$0.01 per request** with no free tier. The weekly digest makes two: about $0.09 a month. Building it took about 15 requests. A script that polls Cost Explorer in a loop is the one way in this curriculum to spend real money without a cluster.
