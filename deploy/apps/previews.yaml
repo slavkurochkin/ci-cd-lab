@@ -1,0 +1,64 @@
+# A preview environment per pull request labelled `preview`. Project 18.
+#
+# Argo CD asks GitHub for open pull requests with the label every two
+# minutes and keeps one Application per match. When a pull request closes or
+# loses the label, its Application is deleted, and the finalizer deletes what
+# it made, the pr-<number> Namespace included. The trigger is the pull
+# request's state, not an event, so a missed webhook cannot strand a preview.
+#
+# A pull request that stays open keeps its preview. That is the reaper's job
+# (.github/workflows/preview-reaper.yml): it removes the label after a few
+# days.
+#
+# The manifests come from main, and only the image from the pull request.
+# Rendering the pull request's own deploy/preview would let it delete its own
+# ResourceQuota. The cost: a change to the Kubernetes manifests is not
+# previewed, only a change to the code.
+#
+# GitHub without a token allows 60 requests an hour from one address. One
+# request per pull-request poll every 120s is 30 an hour.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: previews
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - pullRequest:
+        requeueAfterSeconds: 120
+        github:
+          owner: slavkurochkin
+          repo: ci-cd-lab
+          labels: [preview]
+  template:
+    metadata:
+      name: "pr-{{.number}}"
+      labels:
+        ci-cd-lab/preview: "true"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: preview
+      source:
+        repoURL: https://github.com/slavkurochkin/ci-cd-lab.git
+        targetRevision: main
+        path: deploy/preview
+        kustomize:
+          namespace: "pr-{{.number}}"
+          images:
+            - "ci-cd-lab/api:local=ghcr.io/slavkurochkin/ci-cd-lab/api:pr-{{.number}}-{{.head_sha}}"
+          patches:
+            - target: {kind: Ingress, name: api}
+              patch: |-
+                - op: replace
+                  path: /spec/rules/0/host
+                  value: pr-{{.number}}.preview
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "pr-{{.number}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
