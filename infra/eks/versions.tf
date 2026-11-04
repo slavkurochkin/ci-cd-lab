@@ -18,9 +18,11 @@ terraform {
 provider "aws" {
   region = var.region
 
-  # Every resource carries these. Project 18's Slack cost report groups by them,
-  # and cost allocation tags do not apply retroactively -- an untagged resource
-  # is permanently unattributable, so the tagging happens at creation or not at all.
+  # Every resource carries these. Project 18's Slack cost report groups by them.
+  # A cost-allocation backfill can apply an activated tag to past months, but
+  # only to resources that carried it: an untagged resource stays
+  # unattributable, so the tagging happens at creation or not at all. The node
+  # group's instances need nodes.tf's launch template to get these at all.
   default_tags {
     tags = {
       Project   = "ci-cd-lab"
