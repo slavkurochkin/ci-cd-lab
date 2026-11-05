@@ -331,6 +331,14 @@ jobs:
           flavor: |
             latest=false
 
+      # The day, for APT_REFRESH in the Dockerfiles: the apt-upgrade layer is
+      # rebuilt on the first build of each day instead of being served from the
+      # cache forever. The scan build and the push build share the value, so the
+      # push still reuses the layer the scan inspected.
+      - name: Build date
+        id: day
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
       # Built and loaded locally first, so the scan below has something to
       # inspect that has not been published yet.
       - name: Build
@@ -339,7 +347,9 @@ jobs:
           context: app/${{ inputs.service }}
           load: true
           tags: local/${{ inputs.service }}:scan
-          build-args: GIT_SHA=${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            APT_REFRESH=${{ steps.day.outputs.day }}
           # The registry-backed Actions cache. Layers survive between runs, so
           # a source-only change reuses the dependency layer -- which is what
           # the Dockerfile's layer order was written for.
@@ -370,7 +380,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: GIT_SHA=${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            APT_REFRESH=${{ steps.day.outputs.day }}
           cache-from: type=gha,scope=${{ inputs.service }}
           # A software bill of materials: what is inside the image, attached to
           # the image. During an incident the question is "which of our images

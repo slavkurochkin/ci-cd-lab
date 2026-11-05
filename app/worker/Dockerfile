@@ -19,6 +19,8 @@ FROM node:22-slim AS runtime
 
 # See the note in app/api/Dockerfile: a base image tag is a snapshot of
 # someone else's patching cadence, not a promise of current packages.
+# APT_REFRESH: see app/api/Dockerfile. It makes this layer rebuild once a day.
+ARG APT_REFRESH
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
