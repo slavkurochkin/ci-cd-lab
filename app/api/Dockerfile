@@ -32,6 +32,12 @@ FROM python:3.12-slim AS runtime
 #
 # This runs at build time, so the result is baked into the layer rather than
 # happening on every container start.
+#
+# APT_REFRESH (the build date, from the workflow) makes this layer rebuild once a
+# day. Without it the Actions cache kept serving the first upgrade layer: a
+# 2026-11-05 tag build still had apt 3.0.3 (CVE-2026-109518, HIGH, fixed in
+# 3.0.4) while a no-cache build of the same commit got 3.0.4.
+ARG APT_REFRESH
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
